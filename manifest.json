@@ -1,7 +1,7 @@
 {
   "name": "MenteClara",
   "short_name": "MenteClara",
-  "description": "Tu espacio de oración, devoción y bienestar espiritual con la Biblia RVR1960",
+  "description": "Tu espacio de oracion, devocion y bienestar espiritual con la Biblia RVR1960",
   "start_url": "/menteclara/index.html",
   "scope": "/menteclara/",
   "display": "standalone",
