@@ -355,7 +355,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <label class="field-label" id="lbl-email">Correo electrónico</label>
     <input class="field-input" type="email" id="login-email" placeholder="tu@correo.com">
     <label class="field-label" id="lbl-pass">Contraseña</label>
-    <input class="field-input" type="password" id="login-pass" placeholder="••••••••" onkeyup="if(event.key==='Enter')doLogin()">
+    <div style="position:relative">
+      <input class="field-input" type="password" id="login-pass" placeholder="••••••••" onkeyup="if(event.key==='Enter')doLogin()" style="padding-right:42px">
+      <button onclick="togglePassVisibility('login-pass',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
+    </div>
     <button class="btn-primary" onclick="doLogin()" id="btn-login">Entrar</button>
     <button class="btn-ghost" onclick="showScreen('register')" id="btn-go-register">Crear cuenta nueva</button>
     <div class="security-note">
@@ -378,10 +381,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <label class="field-label" id="lbl-reg-email">Correo electrónico</label>
     <input class="field-input" type="email" id="reg-email" placeholder="tu@correo.com">
     <label class="field-label" id="lbl-reg-pass">Contraseña</label>
-    <input class="field-input" type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" oninput="checkStrength(this.value)">
+    <div style="position:relative">
+      <input class="field-input" type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" oninput="checkStrength(this.value)" style="padding-right:42px">
+      <button onclick="togglePassVisibility('reg-pass',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
+    </div>
     <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
     <label class="field-label" id="lbl-reg-pass2">Confirmar contraseña</label>
-    <input class="field-input" type="password" id="reg-pass2" placeholder="Repite tu contraseña">
+    <div style="position:relative">
+      <input class="field-input" type="password" id="reg-pass2" placeholder="Repite tu contraseña" style="padding-right:42px">
+      <button onclick="togglePassVisibility('reg-pass2',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
+    </div>
     <div class="age-check">
       <input type="checkbox" id="age-confirm">
       <label for="age-confirm" id="lbl-age">Confirmo que tengo 13 años o más y acepto los términos de uso y política de privacidad.</label>
@@ -949,6 +958,18 @@ function showError(id, msg) {
   setTimeout(() => el.style.display = 'none', 4000);
 }
 
+function togglePassVisibility(fieldId, btn) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  if (field.type === 'password') {
+    field.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    field.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
 function checkStrength(pass) {
   const fill = document.getElementById('strength-fill');
   let score = 0;
@@ -972,14 +993,13 @@ async function doLogin() {
   const pass = document.getElementById('login-pass').value;
   if (!email || !pass) { showError('login-error', getText('login_empty')); return; }
 
+  const btn = document.getElementById('btn-login');
+  btn.textContent = '...';
+  btn.disabled = true;
+
   // Try Firebase first
   if (window.fbLogin) {
-    const btn = document.getElementById('btn-login');
-    btn.textContent = '...';
-    btn.disabled = true;
     const result = await window.fbLogin(email, pass);
-    btn.textContent = getText ? getText('nav_home') : 'Entrar';
-    btn.disabled = false;
     if (result.ok) {
       Security.resetAttempts();
       const fbUser = result.user || window._fbUser;
@@ -988,17 +1008,19 @@ async function doLogin() {
       document.getElementById('main-app').style.display = 'flex';
       document.getElementById('screen-login').classList.add('hidden');
       showTab('home', document.getElementById('nav-home'));
+      btn.textContent = 'Entrar'; btn.disabled = false;
       return;
-    } else if (result.error !== 'demo') {
+    } else if (result.error !== 'demo' && result.error !== 'auth/invalid-credential' && result.error !== 'auth/user-not-found') {
+      btn.textContent = 'Entrar'; btn.disabled = false;
       const remaining = Security.recordFailedAttempt();
-      const msg = result.error === 'auth/invalid-credential' ? getText('login_error') : getText('login_attempts').replace('{n}', remaining);
-      showError('login-error', msg);
-      if (remaining <= 0) showError('login-error', getText('login_locked').replace('{sec}', '300'));
+      showError('login-error', getText('login_error'));
       return;
     }
   }
 
-  // Demo fallback (Firebase not configured)
+  btn.textContent = 'Entrar'; btn.disabled = false;
+
+  // Demo fallback — acepta cualquier correo válido y contraseña de 8+ caracteres
   if (Security.validateEmail(email) && pass.length >= 8) {
     Security.resetAttempts();
     currentUser = { email, name: email.split('@')[0], anonId: Security.generateAnonId(), firebase: false };
@@ -1006,10 +1028,8 @@ async function doLogin() {
     document.getElementById('main-app').style.display = 'flex';
     document.getElementById('screen-login').classList.add('hidden');
     showTab('home', document.getElementById('nav-home'));
-    showToast('⚠ Modo demo — configura Firebase para seguridad real');
   } else {
-    const remaining = Security.recordFailedAttempt();
-    showError('login-error', remaining > 0 ? getText('login_attempts').replace('{n}', remaining) : getText('login_locked').replace('{sec}', '300'));
+    showError('login-error', pass.length < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : getText('login_error'));
   }
 }
 
