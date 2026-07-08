@@ -21,112 +21,78 @@ if ('serviceWorker' in navigator) {
 <title>MenteClara — Oración y Devoción</title>
 <!-- Firebase SDK -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, collection, addDoc, getDocs, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, collection, addDoc, getDocs, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-  // ── REEMPLAZA ESTOS VALORES CON LOS DE TU PROYECTO FIREBASE ──
-  // 1. Ve a console.firebase.google.com
-  // 2. Crea proyecto "MenteClara"
-  // 3. Agrega app web y copia tu firebaseConfig aquí
-  const firebaseConfig = {
-    apiKey: "AIzaSyAH_DqIXCpuuVeJJ-H1smLKJMeLz-4hi-s",
-    authDomain: "menteclara-aa439.firebaseapp.com",
-    projectId: "menteclara-aa439",
-    storageBucket: "menteclara-aa439.firebasestorage.app",
-    messagingSenderId: "1068827550637",
-    appId: "1:1068827550637:web:d411ee0efe8de75e6af724"
+const firebaseConfig = {
+  apiKey: "AIzaSyAH_DqIXCpuuVeJJ-H1smLKJMeLz-4hi-s",
+  authDomain: "menteclara-aa439.firebaseapp.com",
+  projectId: "menteclara-aa439",
+  storageBucket: "menteclara-aa439.firebasestorage.app",
+  messagingSenderId: "1068827550637",
+  appId: "1:1068827550637:web:d411ee0efe8de75e6af724"
+};
+
+try {
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  onAuthStateChanged(auth, user => { window._fbUser = user || null; });
+
+  window.fbLogin = async (email, pass) => {
+    try {
+      const c = await signInWithEmailAndPassword(auth, email, pass);
+      return { ok: true, user: c.user };
+    } catch(e) { return { error: e.code }; }
   };
 
-  let app, auth, db;
-  let firebaseReady = false;
-
-  try {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    firebaseReady = true;
-    window._fb = { auth, db, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, onAuthStateChanged, collection, addDoc, getDocs, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment, deleteDoc };
-    console.log('Firebase conectado ✓');
-
-    // Monitor auth state
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        window._fbUser = user;
-        if (!user.emailVerified) {
-          console.warn('Email no verificado');
-        }
-      } else {
-        window._fbUser = null;
-      }
-    });
-
-    // Load community posts from Firestore
-    window.loadFirebasePosts = async () => {
-      try {
-        const q = query(collection(db, 'posts'), orderBy('createdAt','desc'), limit(20));
-        const snap = await getDocs(q);
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      } catch(e) { return null; }
-    };
-
-    // Save post to Firestore
-    window.saveFirebasePost = async (text) => {
-      if (!auth.currentUser) return false;
-      try {
-        await addDoc(collection(db, 'posts'), {
-          text,
-          anonId: auth.currentUser.uid.slice(0,8),
-          praying: 0,
-          createdAt: serverTimestamp(),
-          reported: false
-        });
-        return true;
-      } catch(e) { return false; }
-    };
-
-    // Increment prayer count
-    window.prayFirebase = async (postId) => {
-      try {
-        await updateDoc(doc(db, 'posts', postId), { praying: increment(1) });
-      } catch(e) {}
-    };
-
-    // Report post
-    window.reportFirebase = async (postId) => {
-      try {
-        await updateDoc(doc(db, 'posts', postId), { reported: true });
-      } catch(e) {}
-    };
-
-  } catch(e) {
-    console.warn('Firebase no configurado — modo demo activo:', e.message);
-    window._fb = null;
-    window._fbUser = null;
-  }
-
-  // Firebase Auth wrappers exposed globally
   window.fbRegister = async (email, pass) => {
-    if (!window._fb) return { error: 'demo' };
     try {
-      const cred = await window._fb.createUserWithEmailAndPassword(window._fb.auth, email, pass);
-      await window._fb.sendEmailVerification(cred.user);
+      const c = await createUserWithEmailAndPassword(auth, email, pass);
+      await sendEmailVerification(c.user);
       return { ok: true };
     } catch(e) { return { error: e.code }; }
   };
 
-  window.fbLogin = async (email, pass) => {
-    if (!window._fb) return { error: 'demo' };
-    try {
-      const cred = await window._fb.signInWithEmailAndPassword(window._fb.auth, email, pass);
-      return { ok: true, user: cred.user };
-    } catch(e) { return { error: e.code }; }
+  window.fbLogout = async () => {
+    try { await signOut(auth); } catch(e) {}
   };
 
-  window.fbLogout = async () => {
-    if (!window._fb) return;
-    try { await window._fb.signOut(window._fb.auth); } catch(e) {}
+  window.saveFirebasePost = async (text) => {
+    if (!auth.currentUser) return false;
+    try {
+      await addDoc(collection(db, 'posts'), {
+        text, anonId: auth.currentUser.uid.slice(0,8),
+        praying: 0, createdAt: serverTimestamp(), reported: false
+      });
+      return true;
+    } catch(e) { return false; }
   };
+
+  window.loadFirebasePosts = async () => {
+    try {
+      const q = query(collection(db, 'posts'), orderBy('createdAt','desc'), limit(20));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch(e) { return null; }
+  };
+
+  window.prayFirebase = async (postId) => {
+    try { await updateDoc(doc(db,'posts',postId), { praying: increment(1) }); } catch(e) {}
+  };
+
+  window.reportFirebase = async (postId) => {
+    try { await updateDoc(doc(db,'posts',postId), { reported: true }); } catch(e) {}
+  };
+
+  console.log('Firebase conectado');
+} catch(e) {
+  console.warn('Firebase error:', e.message);
+  window.fbLogin = null; window.fbRegister = null; window.fbLogout = null;
+  window.saveFirebasePost = null; window.loadFirebasePosts = null;
+}
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -951,6 +917,41 @@ function showScreen(id) {
   });
 }
 
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+  const ageOk = document.getElementById('age-confirm').checked;
+  if (!Security.validateEmail(email)) { showError('reg-error', getText('reg_error_email')); return; }
+  if (!Security.validatePassword(pass)) { showError('reg-error', getText('reg_error_pass')); return; }
+  if (pass !== pass2) { showError('reg-error', getText('reg_error_match')); return; }
+  if (!ageOk) { showError('reg-error', getText('reg_error_age')); return; }
+  const btn = document.getElementById('btn-register');
+  btn.textContent = '...'; btn.disabled = true;
+  if (window.fbRegister) {
+    const result = await window.fbRegister(email, pass);
+    btn.textContent = 'Crear cuenta'; btn.disabled = false;
+    if (result.ok) {
+      const suc = document.getElementById('reg-success');
+      suc.textContent = getText('reg_success');
+      suc.style.display = 'block';
+      setTimeout(() => showScreen('verify'), 1500);
+      return;
+    } else if (result.error !== 'demo') {
+      const msgs = { 'auth/email-already-in-use':'Este correo ya está registrado.', 'auth/weak-password': getText('reg_error_pass') };
+      showError('reg-error', msgs[result.error] || 'Error al crear cuenta. Intenta de nuevo.');
+      return;
+    }
+  }
+  btn.textContent = 'Crear cuenta'; btn.disabled = false;
+  // Demo fallback
+  const suc = document.getElementById('reg-success');
+  suc.textContent = getText('reg_success') + ' (modo demo)';
+  suc.style.display = 'block';
+  setTimeout(() => showScreen('verify'), 1500);
+}
+
 function showError(id, msg) {
   const el = document.getElementById(id);
   el.textContent = msg;
@@ -1178,43 +1179,6 @@ function processDonation() {
   window.open(paypalUrl, '_blank');
   showToast(`💝 Gracias por tu donación de $${amount} USD`);
   DonationSecurity.reset();
-}
-  const name = document.getElementById('reg-name').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const pass = document.getElementById('reg-pass').value;
-  const pass2 = document.getElementById('reg-pass2').value;
-  const ageOk = document.getElementById('age-confirm').checked;
-  if (!Security.validateEmail(email)) { showError('reg-error', getText('reg_error_email')); return; }
-  if (!Security.validatePassword(pass)) { showError('reg-error', getText('reg_error_pass')); return; }
-  if (pass !== pass2) { showError('reg-error', getText('reg_error_match')); return; }
-  if (!ageOk) { showError('reg-error', getText('reg_error_age')); return; }
-
-  const btn = document.getElementById('btn-register');
-  btn.textContent = '...'; btn.disabled = true;
-
-  if (window.fbRegister) {
-    const result = await window.fbRegister(email, pass);
-    btn.textContent = 'Crear cuenta'; btn.disabled = false;
-    if (result.ok) {
-      const suc = document.getElementById('reg-success');
-      suc.textContent = getText('reg_success');
-      suc.style.display = 'block';
-      setTimeout(() => showScreen('verify'), 1500);
-      return;
-    } else if (result.error !== 'demo') {
-      const msgs = { 'auth/email-already-in-use':'Este correo ya está registrado.', 'auth/weak-password': getText('reg_error_pass') };
-      showError('reg-error', msgs[result.error] || 'Error al crear cuenta. Intenta de nuevo.');
-      return;
-    }
-  }
-
-  // Demo fallback
-  btn.textContent = 'Crear cuenta'; btn.disabled = false;
-  users[email] = { name, passHash: Security.hashPassword(pass), anonId: Security.generateAnonId() };
-  const suc = document.getElementById('reg-success');
-  suc.textContent = getText('reg_success') + ' (modo demo)';
-  suc.style.display = 'block';
-  setTimeout(() => showScreen('verify'), 1500);
 }
 
 async function doLogout() {
@@ -2480,47 +2444,38 @@ async function searchBible() {
   const results = document.getElementById('bible-results');
   results.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Buscando en Reina Valera...</div>';
 
-  // Búsqueda local RV1909 primero
   const localResults = buscarRV1909(q);
-  
+
   if (BIBLE_API_KEY === 'TU_API_KEY_AQUI') {
     if (localResults.length) {
-      results.innerHTML = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Resultados en Reina Valera 1909 (dominio público)</div>` +
-        localResults.map(v => `
-        <div class="card" style="margin-bottom:8px">
-          <div style="font-size:11px;color:var(--gold);margin-bottom:4px">${v.ref}</div>
-          <div style="font-size:13px;color:var(--text);line-height:1.6;font-style:italic">${v.text}</div>
-          <button onclick="savedVerses.unshift({ref:'${v.ref.replace(/'/g,"\\'")}',text:'${v.text.replace(/'/g,"\\'")}',color:'#6b4fd8',note:'',date:'${new Date().toISOString().split('T')[0]}'});showToast('✓ Guardado')" style="margin-top:8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--text-muted);cursor:pointer">❤ Guardar</button>
-        </div>`).join('');
+      results.innerHTML = '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Resultados en Reina Valera 1909</div>' +
+        localResults.map(function(v) {
+          return '<div class="card" style="margin-bottom:8px"><div style="font-size:11px;color:var(--gold);margin-bottom:4px">' + v.ref + '</div><div style="font-size:13px;color:var(--text);font-style:italic">' + v.text + '</div><button onclick="savedVerses.unshift({ref:this.getAttribute(\'data-r\'),text:this.getAttribute(\'data-t\'),color:\'#6b4fd8\',note:\'\',date:\''+new Date().toISOString().split('T')[0]+'\'})" data-r="'+v.ref.replace(/"/g,'&quot;')+'" data-t="'+v.text.replace(/"/g,'&quot;')+'" style="margin-top:6px;background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--text-muted);cursor:pointer">❤ Guardar</button></div>';
+        }).join('');
     } else {
-      results.innerHTML = '<div class="card"><div class="card-sub">Sin resultados. Intenta con otras palabras como: paz, amor, fe, esperanza, fortaleza, oración.</div></div>';
+      results.innerHTML = '<div class="card"><div class="card-sub">Sin resultados. Intenta con: paz, amor, fe, esperanza.</div></div>';
     }
     return;
   }
 
-  // Con API key — busca en RVR1960
   try {
     const bibleId = bibleIds[currentLang] || BIBLE_ID_ES;
-    const res = await fetch(`https://api.scripture.api.bible/v1/bibles/${bibleId}/search?query=${encodeURIComponent(q)}&limit=5`, {
+    const res = await fetch('https://api.scripture.api.bible/v1/bibles/' + bibleId + '/search?query=' + encodeURIComponent(q) + '&limit=5', {
       headers: { 'api-key': BIBLE_API_KEY }
     });
     const data = await res.json();
-    const verses = data.data?.verses || [];
+    const verses = data.data && data.data.verses ? data.data.verses : [];
     if (!verses.length) {
       results.innerHTML = localResults.length ?
-        localResults.map(v => `<div class="card" style="margin-bottom:8px"><div style="font-size:11px;color:var(--gold);margin-bottom:4px">${v.ref}</div><div style="font-size:13px;color:var(--text);line-height:1.6;font-style:italic">${v.text}</div></div>`).join('') :
-        '<div class="card"><div class="card-sub">Sin resultados. Intenta con otras palabras.</div></div>';
+        '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Resultados en RV1909</div>' + localResults.map(function(v){ return '<div class="card" style="margin-bottom:8px"><div style="font-size:11px;color:var(--gold)">' + v.ref + '</div><div style="font-size:13px;color:var(--text);font-style:italic">' + v.text + '</div></div>'; }).join('') :
+        '<div class="card"><div class="card-sub">Sin resultados.</div></div>';
       return;
     }
-    results.innerHTML = verses.map(v => `
-    <div class="card" style="margin-bottom:8px">
-      <div style="font-size:11px;color:var(--gold);margin-bottom:4px">${v.reference} • RVR1960</div>
-      <div style="font-size:13px;color:var(--text);line-height:1.6;font-style:italic">"${v.text.trim()}"</div>
-    </div>`).join('');
+    results.innerHTML = verses.map(function(v) {
+      return '<div class="card" style="margin-bottom:8px"><div style="font-size:11px;color:var(--gold);margin-bottom:4px">' + v.reference + ' • RVR1960</div><div style="font-size:13px;color:var(--text);line-height:1.6;font-style:italic">"' + v.text.trim() + '"</div></div>';
+    }).join('');
   } catch(e) {
-    results.innerHTML = localResults.length ?
-      localResults.map(v => `<div class="card" style="margin-bottom:8px"><div style="font-size:11px;color:var(--gold);margin-bottom:4px">${v.ref}</div><div style="font-size:13px;color:var(--text);line-height:1.6;font-style:italic">${v.text}</div></div>`).join('') :
-      '<div class="card"><div class="card-sub">Sin conexión. Intenta de nuevo.</div></div>';
+    results.innerHTML = '<div class="card"><div class="card-sub">Sin conexión. Intenta de nuevo.</div></div>';
   }
 }
 
@@ -2576,21 +2531,8 @@ function markAnswered(i) {
 }
 
 // ═══════════════════════════════════════
-// UPDATE HOME TO INCLUDE BIBLE SEARCH & DIARY
-// ═══════════════════════════════════════
-const _origRenderHome = renderHome;
-renderHome = function() {
-  return _origRenderHome()
-    .replace('onclick="showToast(\''+getText('mod_diary')+'\')"', 'onclick="openDiary()"')
-    .replace('onclick="showToast(\''+getText('mod_music')+'\')"', 'onclick="showToast(\'Próximamente: Música Worship con Suno IA\')"');
-};
-
 // Update verse on load and lang change
-const _origSetLang = setLang;
-setLang = function(l) {
-  _origSetLang(l);
-  updateVerseDisplay();
-};
+
 
 // ═══════════════════════════════════════
 // SISTEMA DE AUDIO — VOZ Y MÚSICA
@@ -2747,12 +2689,13 @@ const NotificationSystem = {
     { ref:'2 Timoteo 1:7 • RV1909', text:'Porque no nos ha dado Dios espíritu de cobardía, sino de fortaleza, y de amor, y de templanza.', meditacion:'Si este día estuvo lleno de miedos o incertidumbre, recuerda que Dios no fue el autor de esa ansiedad. Él te ha dado fortaleza, amor y templanza. Descansa en ese regalo.', oracion:'Señor, echo sobre ti toda la ansiedad de este día. Renueva mi mente durante el descanso y despiértame mañana con tu espíritu de fortaleza y amor. Amén.' },
   ],
 
-  async requestPermission() {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission === 'granted') return true;
-    const perm = await Notification.requestPermission();
-    this.permission = perm;
-    return perm === 'granted';
+  requestPermission() {
+    if (!('Notification' in window)) return Promise.resolve(false);
+    if (Notification.permission === 'granted') return Promise.resolve(true);
+    return Notification.requestPermission().then(perm => {
+      this.permission = perm;
+      return perm === 'granted';
+    });
   },
 
   getVersiculo(type) {
@@ -2910,7 +2853,7 @@ function renderQuiz() {
         if (i === q.correct) { bg='rgba(16,185,129,0.15)'; border='#10b981'; color='#6ee7b7'; }
         else if (i === quizState.selectedOption) { bg='rgba(239,68,68,0.15)'; border='#ef4444'; color='#fca5a5'; }
       }
-      return `<button onclick="${quizState.answered?'':` answerQuiz(${i})`}" style="width:100%;background:${bg};border:0.5px solid ${border};border-radius:8px;padding:12px;color:${color};font-size:13px;text-align:left;margin-bottom:8px;cursor:${quizState.answered?'default':'pointer'}">${opt}</button>`;
+      return `<button onclick="if(!${quizState.answered})answerQuiz(${i})" style="width:100%;background:${bg};border:0.5px solid ${border};border-radius:8px;padding:12px;color:${color};font-size:13px;text-align:left;margin-bottom:8px;cursor:${quizState.answered?'default':'pointer'}">${opt}</button>`;
     }).join('')}
     ${quizState.answered ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;border-left:2px solid var(--purple);padding-left:8px">Referencia: ${q.ref} RVR1960</div>
     <button class="btn-primary" style="margin-top:12px" onclick="nextQuizQuestion()">Siguiente →</button>` : ''}
