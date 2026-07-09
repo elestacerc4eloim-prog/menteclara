@@ -453,6 +453,66 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <script>
 // ═══════════════════════════════════════
+// STREAK & REAL-TIME STATS
+// ═══════════════════════════════════════
+const AppStats = {
+  prayingToday: 0,
+  lastActiveDate: null,
+
+  getStoredStreak() {
+    try {
+      const data = JSON.parse(localStorage.getItem('mc_streak') || '{"streak":0,"lastDate":null}');
+      return data;
+    } catch(e) { return { streak: 0, lastDate: null }; }
+  },
+
+  updateStreak() {
+    const today = new Date().toISOString().split('T')[0];
+    const data = this.getStoredStreak();
+    if (data.lastDate === today) return data.streak;
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    let streak = data.lastDate === yesterday ? data.streak + 1 : 1;
+    try { localStorage.setItem('mc_streak', JSON.stringify({ streak, lastDate: today })); } catch(e) {}
+    return streak;
+  },
+
+  getStreak() { return this.getStoredStreak().streak || 0; },
+
+  getStreakDays() {
+    const days = ['D','L','M','M','J','V','S'];
+    const today = new Date().getDay();
+    const streak = this.getStreak();
+    return days.map((d, i) => {
+      const diff = (i - today + 7) % 7;
+      if (diff === 0) return { label: d, type: 's-today' };
+      if (diff > 0) return { label: d, type: 's-empty' };
+      if (7 - diff <= streak) return { label: d, type: 's-done' };
+      return { label: d, type: 's-empty' };
+    });
+  }
+};
+
+// Update streak on app load
+function getStreak() { return AppStats.updateStreak(); }
+function getPrayingCount() {
+  const base = communityPosts.reduce((sum, p) => sum + (p.praying || 0), 0);
+  return base + AppStats.prayingToday;
+}
+function renderStreakDays() {
+  return AppStats.getStreakDays().map(d =>
+    '<div class="streak-day ' + d.type + '">' + d.label + '</div>'
+  ).join('');
+}
+
+// Update stats every 60 seconds
+setInterval(() => {
+  const sn = document.getElementById('stat-streak-num');
+  const pn = document.getElementById('stat-praying-num');
+  if (sn) sn.textContent = getStreak();
+  if (pn) pn.textContent = getPrayingCount();
+}, 60000);
+
+// ═══════════════════════════════════════
 // SECURITY SYSTEM
 // ═══════════════════════════════════════
 const Security = {
@@ -962,13 +1022,8 @@ function showError(id, msg) {
 function togglePassVisibility(fieldId, btn) {
   const field = document.getElementById(fieldId);
   if (!field) return;
-  if (field.type === 'password') {
-    field.type = 'text';
-    btn.textContent = '🙈';
-  } else {
-    field.type = 'password';
-    btn.textContent = '👁';
-  }
+  field.type = field.type === 'password' ? 'text' : 'password';
+  btn.textContent = field.type === 'password' ? '👁' : '🙈';
 }
 
 function checkStrength(pass) {
@@ -1195,579 +1250,7 @@ async function doLogout() {
 let timerInterval = null;
 let timerSeconds = 0;
 let timerRunning = false;
-const communityPosts = [
-  { anon:'Hermano anónimo', time:'hace 5 min', text:'Pido oración por la salud de mi familia. Dios es fiel y sé que Él responde.', praying:12 },
-  { anon:'Sierva del Señor', time:'hace 18 min', text:'¡Agradezco a Dios por responder mi petición de trabajo! Gloria a Él.', praying:34 },
-  { anon:'Guerrero de fe', time:'hace 1 hora', text:'Intercesión por los pueblos no alcanzados. Que el evangelio llegue a toda nación.', praying:67 },
-];
-const pueblos = [
-  { name:'Pueblo Hazara', country:'Afganistán', pop:'3.5 millones', religion:'Islam chiíta', verse:'"Id por todo el mundo y predicad el evangelio a toda criatura." — Marcos 16:15', praying:234 },
-  { name:'Pueblo Uyghur', country:'China', pop:'11 millones', religion:'Islam sunita', verse:'"Porque de tal manera amó Dios al mundo..." — Juan 3:16', praying:189 },
-  { name:'Pueblo Somali', country:'Somalia / Etiopía', pop:'18 millones', religion:'Islam', verse:'"¿Cómo, pues, invocarán a aquel en el cual no han creído?" — Romanos 10:14', praying:312 },
-  { name:'Pueblo Wolof', country:'Senegal / Gambia', pop:'5 millones', religion:'Islam sunita', verse:'"Y este evangelio del reino será predicado en todo el mundo." — Mateo 24:14', praying:156 },
-  { name:'Pueblo Kurdo', country:'Turquía / Irak / Siria', pop:'30 millones', religion:'Islam', verse:'"Pedid, y se os dará; buscad, y hallaréis." — Mateo 7:7', praying:421 },
-  { name:'Pueblo Tibetano', country:'Tibet / China', pop:'6 millones', religion:'Budismo tibetano', verse:'"Yo soy el camino, y la verdad, y la vida." — Juan 14:6', praying:298 },
-  { name:'Pueblo Bereber', country:'Marruecos / Argelia', pop:'25 millones', religion:'Islam', verse:'"Mas a todos los que le recibieron... les dio potestad de ser hechos hijos de Dios." — Juan 1:12', praying:187 },
-];
-
-const readingPlans = {
-  proverbios: {
-    name:'Proverbios — 31 días', desc:'Un capítulo por día del libro de la sabiduría',
-    items:[
-      { ref:'Proverbios 1', desc:'Sabiduría y su comienzo', done:true },
-      { ref:'Proverbios 2', desc:'Los beneficios de la sabiduría', done:true },
-      { ref:'Proverbios 3', desc:'Confiar en el Señor de todo corazón', done:false, today:true },
-      { ref:'Proverbios 4', desc:'Instrucción de un padre', done:false },
-      { ref:'Proverbios 5', desc:'Advertencia sobre la inmoralidad', done:false },
-      { ref:'Proverbios 6', desc:'Lazos, pereza y el malvado', done:false },
-      { ref:'Proverbios 7', desc:'Advertencia contra el adulterio', done:false },
-    ]
-  },
-  salmos_consuelo: {
-    name:'Salmos de consuelo — 7 días', desc:'Los salmos más poderosos sobre paz y esperanza',
-    items:[
-      { ref:'Salmo 23', desc:'El Señor es mi pastor', done:false, today:true },
-      { ref:'Salmo 27', desc:'El Señor es mi luz', done:false },
-      { ref:'Salmo 34', desc:'Prueba y liberación', done:false },
-      { ref:'Salmo 46', desc:'Dios es nuestro refugio', done:false },
-      { ref:'Salmo 91', desc:'Vivir bajo la sombra del Altísimo', done:false },
-      { ref:'Salmo 103', desc:'Bendice alma mía a Jehová', done:false },
-      { ref:'Salmo 121', desc:'Mi socorro viene del Señor', done:false },
-    ]
-  },
-  juan: {
-    name:'Evangelio de Juan — 21 días', desc:'Conoce a Jesús a través del discípulo amado',
-    items:[
-      { ref:'Juan 1', desc:'En el principio era el Verbo', done:false, today:true },
-      { ref:'Juan 2', desc:'Las bodas de Caná', done:false },
-      { ref:'Juan 3', desc:'El nuevo nacimiento — Juan 3:16', done:false },
-      { ref:'Juan 4', desc:'La mujer samaritana', done:false },
-      { ref:'Juan 5', desc:'La autoridad del Hijo', done:false },
-    ]
-  },
-  fe: {
-    name:'Fe que mueve montañas — 7 días', desc:'Versículos y reflexiones sobre la fe',
-    items:[
-      { ref:'Hebreos 11:1-6', desc:'La definición de la fe', done:false, today:true },
-      { ref:'Marcos 11:22-24', desc:'Tened fe en Dios', done:false },
-      { ref:'Mateo 17:14-20', desc:'Fe como grano de mostaza', done:false },
-      { ref:'Romanos 10:17', desc:'La fe viene por el oír', done:false },
-      { ref:'Santiago 2:14-26', desc:'La fe sin obras está muerta', done:false },
-      { ref:'Hebreos 11:32-40', desc:'Los héroes de la fe', done:false },
-      { ref:'1 Pedro 1:3-9', desc:'Fe probada como el oro', done:false },
-    ]
-  },
-  oracion: {
-    name:'El poder de la oración — 7 días', desc:'Aprende a orar como Jesús enseñó',
-    items:[
-      { ref:'Mateo 6:5-15', desc:'El Padre Nuestro', done:false, today:true },
-      { ref:'Lucas 18:1-8', desc:'La persistencia en la oración', done:false },
-      { ref:'Filipenses 4:6-7', desc:'Orar en todo', done:false },
-      { ref:'1 Tesalonicenses 5:17', desc:'Orad sin cesar', done:false },
-      { ref:'Santiago 5:13-18', desc:'La oración eficaz del justo', done:false },
-      { ref:'Juan 17', desc:'La oración sacerdotal de Jesús', done:false },
-      { ref:'Salmos 51', desc:'Oración de arrepentimiento', done:false },
-    ]
-  },
-  amor: {
-    name:'El amor de Dios — 5 días', desc:'Descubre la profundidad del amor divino',
-    items:[
-      { ref:'1 Corintios 13', desc:'El himno al amor', done:false, today:true },
-      { ref:'Juan 3:16-21', desc:'Dios amó al mundo', done:false },
-      { ref:'Romanos 8:31-39', desc:'Nada nos separará de su amor', done:false },
-      { ref:'1 Juan 4:7-21', desc:'Dios es amor', done:false },
-      { ref:'Efesios 3:14-21', desc:'Ancho, largo, alto y profundo', done:false },
-    ]
-  },
-  paz: {
-    name:'Paz en la tormenta — 5 días', desc:'Versículos para encontrar paz en medio del caos',
-    items:[
-      { ref:'Juan 14:25-31', desc:'Mi paz os doy', done:false, today:true },
-      { ref:'Filipenses 4:4-9', desc:'La paz que sobrepasa todo entendimiento', done:false },
-      { ref:'Isaías 26:3', desc:'Perfecta paz para el que confía', done:false },
-      { ref:'Salmos 46', desc:'Dios es nuestro refugio y fortaleza', done:false },
-      { ref:'Mateo 11:28-30', desc:'Venid a mí y descansaréis', done:false },
-    ]
-  },
-  ansiedad: {
-    name:'Venciendo la ansiedad — 7 días', desc:'La Biblia habla a los afanosos',
-    items:[
-      { ref:'Mateo 6:25-34', desc:'No os afanéis', done:false, today:true },
-      { ref:'1 Pedro 5:6-7', desc:'Echad vuestra ansiedad sobre Él', done:false },
-      { ref:'Salmos 23', desc:'El Señor me pastorea', done:false },
-      { ref:'Isaías 41:10', desc:'No temas, yo estoy contigo', done:false },
-      { ref:'Filipenses 4:6-7', desc:'Por nada estéis afanosos', done:false },
-      { ref:'Salmos 94:18-19', desc:'En mis pensamientos angustiosos', done:false },
-      { ref:'2 Timoteo 1:7', desc:'No espíritu de cobardía', done:false },
-    ]
-  },
-  perdon: {
-    name:'El perdón que libera — 5 días', desc:'Perdonar como Dios nos perdonó',
-    items:[
-      { ref:'Mateo 18:21-35', desc:'Perdonar setenta veces siete', done:false, today:true },
-      { ref:'Efesios 4:31-32', desc:'Perdonaos como Dios os perdonó', done:false },
-      { ref:'Lucas 23:34', desc:'Padre, perdónalos', done:false },
-      { ref:'Salmos 51:1-12', desc:'La oración del perdón', done:false },
-      { ref:'Colosenses 3:12-14', desc:'Perdonad como el Señor os perdonó', done:false },
-    ]
-  },
-  familia: {
-    name:'La familia según Dios — 7 días', desc:'Principios bíblicos para el hogar',
-    items:[
-      { ref:'Génesis 2:18-25', desc:'El diseño del matrimonio', done:false, today:true },
-      { ref:'Efesios 5:22-33', desc:'Esposos y esposas', done:false },
-      { ref:'Efesios 6:1-4', desc:'Hijos y padres', done:false },
-      { ref:'Proverbios 22:6', desc:'Instruye al niño', done:false },
-      { ref:'Josué 24:14-15', desc:'Yo y mi casa serviremos', done:false },
-      { ref:'Salmos 127', desc:'Si Jehová no edifica la casa', done:false },
-      { ref:'Proverbios 31:10-31', desc:'La mujer virtuosa', done:false },
-    ]
-  },
-  identidad: {
-    name:'Tu identidad en Cristo — 7 días', desc:'Quién eres en Dios',
-    items:[
-      { ref:'Génesis 1:26-27', desc:'Creado a imagen de Dios', done:false, today:true },
-      { ref:'Juan 1:12', desc:'Hijos de Dios', done:false },
-      { ref:'2 Corintios 5:17', desc:'Nueva criatura en Cristo', done:false },
-      { ref:'Efesios 1:3-14', desc:'Bendito con toda bendición espiritual', done:false },
-      { ref:'Romanos 8:14-17', desc:'Herederos de Dios', done:false },
-      { ref:'1 Pedro 2:9', desc:'Real sacerdocio, nación santa', done:false },
-      { ref:'Sofonías 3:17', desc:'Dios se regocija sobre ti', done:false },
-    ]
-  },
-  proposito: {
-    name:'Tu propósito divino — 5 días', desc:'Descubre para qué fuiste creado',
-    items:[
-      { ref:'Jeremías 29:11', desc:'Planes de bien para ti', done:false, today:true },
-      { ref:'Efesios 2:10', desc:'Creados para buenas obras', done:false },
-      { ref:'Romanos 8:28-30', desc:'Llamados conforme a su propósito', done:false },
-      { ref:'Proverbios 16:3', desc:'Encomienda tus obras al Señor', done:false },
-      { ref:'Mateo 28:18-20', desc:'La Gran Comisión', done:false },
-    ]
-  },
-  salvacion: {
-    name:'El camino de salvación — 5 días', desc:'El plan redentor de Dios',
-    items:[
-      { ref:'Romanos 3:23', desc:'Todos pecaron', done:false, today:true },
-      { ref:'Romanos 6:23', desc:'La paga del pecado', done:false },
-      { ref:'Juan 3:16', desc:'Dios amó al mundo', done:false },
-      { ref:'Romanos 10:9-10', desc:'Confiesa y serás salvo', done:false },
-      { ref:'Hechos 4:12', desc:'No hay otro nombre', done:false },
-    ]
-  },
-  generosidad: {
-    name:'El corazón generoso — 5 días', desc:'Dar como Dios da',
-    items:[
-      { ref:'Lucas 21:1-4', desc:'La ofrenda de la viuda', done:false, today:true },
-      { ref:'2 Corintios 9:6-8', desc:'El dador alegre', done:false },
-      { ref:'Proverbios 11:24-25', desc:'El que da, más recibe', done:false },
-      { ref:'Malaquías 3:10', desc:'Traed los diezmos', done:false },
-      { ref:'Lucas 6:38', desc:'Dad y se os dará', done:false },
-    ]
-  },
-  sufrimiento: {
-    name:'Fortaleza en el sufrimiento — 7 días', desc:'La Biblia habla al que sufre',
-    items:[
-      { ref:'Job 1:1-22', desc:'Job no pecó con sus labios', done:false, today:true },
-      { ref:'Romanos 8:18', desc:'Los sufrimientos no son comparables', done:false },
-      { ref:'2 Corintios 4:17', desc:'Leve tribulación momentánea', done:false },
-      { ref:'Santiago 1:2-4', desc:'Tened por sumo gozo las pruebas', done:false },
-      { ref:'Salmos 22:1-11', desc:'Dios mío, ¿por qué me has desamparado?', done:false },
-      { ref:'Isaías 53', desc:'El varón de dolores', done:false },
-      { ref:'Apocalipsis 21:4', desc:'Enjugará toda lágrima', done:false },
-    ]
-  },
-  mision: {
-    name:'Misión y evangelismo — 5 días', desc:'Llamados a proclamar el evangelio',
-    items:[
-      { ref:'Mateo 28:18-20', desc:'Id y haced discípulos', done:false, today:true },
-      { ref:'Romanos 10:14-15', desc:'¿Cómo oirán sin predicador?', done:false },
-      { ref:'Hechos 1:8', desc:'Me seréis testigos', done:false },
-      { ref:'Isaías 6:8', desc:'Heme aquí, envíame a mí', done:false },
-      { ref:'Marcos 16:15', desc:'Predicad el evangelio a toda criatura', done:false },
-    ]
-  },
-  gratitud: {
-    name:'Un corazón agradecido — 5 días', desc:'La gratitud como estilo de vida',
-    items:[
-      { ref:'1 Tesalonicenses 5:18', desc:'Dad gracias en todo', done:false, today:true },
-      { ref:'Salmos 100', desc:'Servid a Jehová con alegría', done:false },
-      { ref:'Filipenses 4:11-12', desc:'He aprendido a contentarme', done:false },
-      { ref:'Salmos 103:1-5', desc:'Bendice alma mía a Jehová', done:false },
-      { ref:'Colosenses 3:15-17', desc:'Abundad en acciones de gracias', done:false },
-    ]
-  },
-  genesis: {
-    name:'Génesis — Los orígenes — 7 días', desc:'El principio de todas las cosas',
-    items:[
-      { ref:'Génesis 1:1-31', desc:'La creación del mundo', done:false, today:true },
-      { ref:'Génesis 2:1-25', desc:'El hombre y la mujer', done:false },
-      { ref:'Génesis 3:1-24', desc:'La caída', done:false },
-      { ref:'Génesis 6:1-22', desc:'Noé y el arca', done:false },
-      { ref:'Génesis 12:1-9', desc:'El llamado de Abraham', done:false },
-      { ref:'Génesis 22:1-19', desc:'La prueba de Abraham', done:false },
-      { ref:'Génesis 50:15-26', desc:'El perdón de José', done:false },
-    ]
-  },
-  resurrecion: {
-    name:'La resurrección — 7 días', desc:'El corazón del evangelio',
-    items:[
-      { ref:'Lucas 23:26-56', desc:'La crucifixión', done:false, today:true },
-      { ref:'Lucas 24:1-12', desc:'La tumba vacía', done:false },
-      { ref:'Juan 20:1-18', desc:'María y el resucitado', done:false },
-      { ref:'Juan 20:19-31', desc:'Tomás y la fe', done:false },
-      { ref:'1 Corintios 15:1-20', desc:'Si Cristo no resucitó...', done:false },
-      { ref:'1 Corintios 15:50-58', desc:'Victoria sobre la muerte', done:false },
-      { ref:'Apocalipsis 1:17-18', desc:'El que vive por los siglos', done:false },
-    ]
-  },
-  espiritu_santo: {
-    name:'El Espíritu Santo — 7 días', desc:'Conoce al Consolador prometido',
-    items:[
-      { ref:'Juan 14:15-26', desc:'El Consolador prometido', done:false, today:true },
-      { ref:'Hechos 2:1-21', desc:'Pentecostés', done:false },
-      { ref:'Romanos 8:1-17', desc:'Vida en el Espíritu', done:false },
-      { ref:'Gálatas 5:16-26', desc:'El fruto del Espíritu', done:false },
-      { ref:'1 Corintios 12:1-11', desc:'Los dones espirituales', done:false },
-      { ref:'Efesios 5:18', desc:'Sed llenos del Espíritu', done:false },
-      { ref:'Juan 16:5-15', desc:'El Espíritu de verdad', done:false },
-    ]
-  },
-};
-
-let activePlan = 'proverbios';
-const planes = [
-  { ref:'Proverbios 1', desc:'Sabiduría y su comienzo', done:true },
-  { ref:'Proverbios 2', desc:'Los beneficios de la sabiduría', done:true },
-  { ref:'Proverbios 3', desc:'Confiar en el Señor de todo corazón', done:false, today:true },
-  { ref:'Proverbios 4', desc:'Instrucción de un padre', done:false },
-  { ref:'Proverbios 5', desc:'Advertencia sobre la inmoralidad', done:false },
-  { ref:'Proverbios 6', desc:'Lazos, pereza y el malvado', done:false },
-  { ref:'Proverbios 7', desc:'Advertencia contra el adulterio', done:false },
-];
-
-// ═══════════════════════════════════════
-// GAMIFICATION
-// ═══════════════════════════════════════
-const achievements = [
-  { id:'first_prayer', icon:'🙏', name:'Primera oración', desc:'Abriste el timer de oración por primera vez', earned:true },
-  { id:'streak_7', icon:'🔥', name:'Semana de fuego', desc:'7 días seguidos en la app', earned:true },
-  { id:'streak_14', icon:'⚡', name:'Centinela', desc:'14 días seguidos', earned:true },
-  { id:'streak_30', icon:'👑', name:'Mensajero fiel', desc:'30 días seguidos', earned:false, progress:14, total:30 },
-  { id:'community_1', icon:'💬', name:'Voz de oración', desc:'Publicaste tu primera petición', earned:false, progress:0, total:1 },
-  { id:'peoples_7', icon:'🌍', name:'Embajador', desc:'Oraste por 7 pueblos diferentes', earned:false, progress:3, total:7 },
-  { id:'bible_search', icon:'📖', name:'Buscador de la Verdad', desc:'Usaste el buscador bíblico', earned:false, progress:0, total:1 },
-  { id:'diary_5', icon:'📓', name:'Guardián de promesas', desc:'Registraste 5 peticiones en tu diario', earned:false, progress:2, total:5 },
-  { id:'answered_1', icon:'✨', name:'Testimonio', desc:'Marcaste tu primera petición como respondida', earned:true },
-];
-
-let userPoints = 340;
-let userLevel = 3;
-
-function getLevel(pts) {
-  if (pts < 100) return { level:1, name:'Semilla', next:100 };
-  if (pts < 300) return { level:2, name:'Brote', next:300 };
-  if (pts < 600) return { level:3, name:'Árbol', next:600 };
-  if (pts < 1000) return { level:4, name:'Siervo fiel', next:1000 };
-  return { level:5, name:'Embajador del Reino', next:9999 };
-}
-
-function openAchievements() {
-  const content = document.getElementById('main-content');
-  const lvl = getLevel(userPoints);
-  const progress = Math.round((userPoints / lvl.next) * 100);
-  content.innerHTML = `
-  <div class="section-label">🏆 Logros y progreso</div>
-  <div class="card" style="margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div>
-        <div style="font-size:16px;font-weight:600;color:var(--gold)">Nivel ${lvl.level} — ${lvl.name}</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${userPoints} / ${lvl.next} puntos</div>
-      </div>
-      <div style="font-size:32px">⭐</div>
-    </div>
-    <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-      <div style="height:100%;width:${progress}%;background:var(--gold);border-radius:4px;transition:width 0.5s"></div>
-    </div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-  ${achievements.map(a => `
-  <div style="background:var(--card);border:0.5px solid ${a.earned?'rgba(232,201,122,0.3)':'var(--border)'};border-radius:10px;padding:12px;${a.earned?'':'opacity:0.6'}">
-    <div style="font-size:24px;margin-bottom:6px">${a.icon}</div>
-    <div style="font-size:12px;font-weight:600;color:${a.earned?'var(--gold)':'var(--text)'};margin-bottom:2px">${a.name}</div>
-    <div style="font-size:11px;color:var(--text-muted);line-height:1.4">${a.desc}</div>
-    ${!a.earned && a.progress !== undefined ? `<div style="margin-top:6px;height:4px;background:var(--border);border-radius:2px"><div style="height:100%;width:${Math.round(a.progress/a.total*100)}%;background:var(--purple);border-radius:2px"></div></div><div style="font-size:10px;color:var(--text-dim);margin-top:3px">${a.progress}/${a.total}</div>` : ''}
-    ${a.earned ? '<div style="font-size:10px;color:var(--gold);margin-top:4px">✓ Conseguido</div>' : ''}
-  </div>`).join('')}
-  </div>
-  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:12px">← Volver</button>`;
-}
-
-// ═══════════════════════════════════════
-// PLAN IGLESIAS
-// ═══════════════════════════════════════
-const churchPlans = [
-  { name:'Plan Semilla', price:'$1 USD/mes', members:'Hasta 50 miembros', features:['Panel del pastor','Devocionales a la congregación','Grupo privado de la iglesia','Chat de congregación','Estadísticas básicas'] },
-  { name:'Plan Crecimiento', price:'$5 USD/mes', members:'Hasta 200 miembros', features:['Todo lo del Plan Semilla','Planes de estudio grupales','Retos bíblicos para la iglesia','Cadenas de oración organizadas','Estadísticas avanzadas','Soporte prioritario'] },
-  { name:'Plan Ministerio', price:'$10 USD/mes', members:'Sin límite de miembros', features:['Todo lo anterior','Múltiples grupos celulares','Gestión de líderes','Informes semanales al pastor','API para integración','Soporte dedicado 24/7'] },
-];
-
-function openChurchPlans() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = `
-  <div class="section-label">⛪ Plan Iglesias</div>
-  <div class="card" style="margin-bottom:12px">
-    <div class="card-title">¿Eres pastor o líder?</div>
-    <div class="card-sub" style="margin-top:4px">Gestiona tu congregación, envía devocionales personalizados y organiza cadenas de oración desde un panel dedicado.</div>
-  </div>
-  ${churchPlans.map((p,i) => `
-  <div style="background:var(--card);border:0.5px solid ${i===1?'rgba(232,201,122,0.4)':'var(--border)'};border-radius:var(--radius);padding:16px;margin-bottom:10px;position:relative">
-    ${i===1?'<div style="position:absolute;top:-10px;left:16px;background:var(--gold);color:var(--bg);font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px">MÁS POPULAR</div>':''}
-    <div style="font-size:16px;font-weight:600;color:var(--gold);margin-bottom:2px">${p.name}</div>
-    <div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:2px">${p.price}</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">${p.members}</div>
-    ${p.features.map(f=>`<div style="font-size:12px;color:var(--text);padding:4px 0;display:flex;gap:6px;align-items:center"><span style="color:var(--green)">✓</span>${f}</div>`).join('')}
-    <button class="btn-primary" style="margin-top:12px" onclick="showToast('Próximamente — contacta a soporte para activar')">Activar plan</button>
-  </div>`).join('')}
-  <div class="card" style="margin-top:4px">
-    <div class="card-title">30 días gratis</div>
-    <div class="card-sub">Prueba cualquier plan sin costo. Sin tarjeta de crédito requerida.</div>
-  </div>
-  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
-}
-
-// ═══════════════════════════════════════
-// MÚSICA WORSHIP
-// ═══════════════════════════════════════
-const worshipTracks = [
-  { title:'Paz en la tormenta', style:'Worship instrumental', duration:'3:42', mood:'Calma', emoji:'🕊' },
-  { title:'Mañana de gloria', style:'Lofi devocional', duration:'4:15', mood:'Esperanza', emoji:'🌅' },
-  { title:'En tu presencia', style:'Ambient worship', duration:'5:30', mood:'Adoración', emoji:'✨' },
-  { title:'Guerrero de oración', style:'Épico instrumental', duration:'3:58', mood:'Fe', emoji:'⚔️' },
-  { title:'Río de vida', style:'Contemporáneo suave', duration:'4:22', mood:'Gozo', emoji:'💧' },
-];
-let currentTrack = null;
-let isPlaying = false;
-
-function openMusic() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = `
-  <div class="section-label">🎵 Música Worship</div>
-  <div class="card" style="margin-bottom:12px;text-align:center;background:linear-gradient(135deg,var(--bg2),var(--bg3))">
-    <div style="font-size:48px;margin-bottom:8px" id="music-emoji">${currentTrack ? worshipTracks[currentTrack].emoji : '🎵'}</div>
-    <div style="font-size:15px;font-weight:600;color:var(--gold);margin-bottom:2px" id="music-title">${currentTrack !== null ? worshipTracks[currentTrack].title : 'Selecciona una pista'}</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px" id="music-style">${currentTrack !== null ? worshipTracks[currentTrack].style : 'Música generada con Suno IA'}</div>
-    <div style="display:flex;justify-content:center;gap:16px">
-      <button onclick="prevTrack()" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:50%;width:40px;height:40px;color:var(--text-muted);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">⏮</button>
-      <button onclick="togglePlay()" id="play-btn" style="background:var(--purple);border:none;border-radius:50%;width:52px;height:52px;color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center">${isPlaying?'⏸':'▶'}</button>
-      <button onclick="nextTrack()" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:50%;width:40px;height:40px;color:var(--text-muted);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">⏭</button>
-    </div>
-  </div>
-  <div class="section-label">Lista de reproducción</div>
-  ${worshipTracks.map((t,i) => `
-  <div onclick="playTrack(${i})" style="background:${currentTrack===i?'rgba(107,79,216,0.15)':'var(--card)'};border:0.5px solid ${currentTrack===i?'var(--purple)':'var(--border)'};border-radius:10px;padding:12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:10px">
-    <div style="font-size:24px">${t.emoji}</div>
-    <div style="flex:1">
-      <div style="font-size:13px;font-weight:500;color:${currentTrack===i?'var(--purple-light)':'var(--text)'}">${t.title}</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${t.style} • ${t.mood}</div>
-    </div>
-    <div style="font-size:11px;color:var(--text-dim)">${t.duration}</div>
-  </div>`).join('')}
-  <div class="card" style="margin-top:8px">
-    <div class="card-sub">🎵 Música generada con Suno IA — Conecta tu cuenta de Suno para generar pistas personalizadas según tu estado de ánimo.</div>
-  </div>
-  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
-}
-
-function playTrack(i) {
-  currentTrack = i;
-  isPlaying = true;
-  openMusic();
-  showToast('▶ ' + worshipTracks[i].title);
-}
-
-function togglePlay() {
-  if (currentTrack === null) { playTrack(0); return; }
-  isPlaying = !isPlaying;
-  const btn = document.getElementById('play-btn');
-  if (btn) btn.textContent = isPlaying ? '⏸' : '▶';
-  showToast(isPlaying ? '▶ Reproduciendo' : '⏸ Pausado');
-}
-
-function nextTrack() {
-  const next = currentTrack === null ? 0 : (currentTrack + 1) % worshipTracks.length;
-  playTrack(next);
-}
-
-function prevTrack() {
-  const prev = currentTrack === null ? 0 : (currentTrack - 1 + worshipTracks.length) % worshipTracks.length;
-  playTrack(prev);
-}
-// ═══════════════════════════════════════
-// AYUNO — TRACKER
-// ═══════════════════════════════════════
-let ayunoState = { active: false, startTime: null, type: '', goal: '', hours: 0 };
-const ayunoTypes = [
-  { name: 'Ayuno completo', desc: 'Sin alimentos ni bebidas (excepto agua)', hours: 24 },
-  { name: 'Ayuno parcial', desc: 'Solo frutas y verduras', hours: 12 },
-  { name: 'Ayuno Daniel', desc: 'Sin carnes ni manjares', hours: 21 * 24 },
-  { name: 'Ayuno de medios', desc: 'Sin redes sociales ni entretenimiento', hours: 24 },
-];
-
-function openAyuno() {
-  const content = document.getElementById('main-content');
-  if (ayunoState.active && ayunoState.startTime) {
-    const elapsed = Date.now() - ayunoState.startTime;
-    const hours = Math.floor(elapsed / 3600000);
-    const mins = Math.floor((elapsed % 3600000) / 60000);
-    const pct = Math.min(100, Math.round(elapsed / (ayunoState.hours * 3600000) * 100));
-    content.innerHTML = `
-    <div class="section-label">🕊 Ayuno en progreso</div>
-    <div class="card" style="text-align:center;padding:20px;background:linear-gradient(135deg,var(--bg2),var(--bg3))">
-      <div style="font-size:14px;color:var(--gold);font-weight:600;margin-bottom:4px">${ayunoState.type}</div>
-      <div style="font-size:36px;font-weight:700;color:var(--text);margin:12px 0">${hours}h ${mins}m</div>
-      <div style="height:8px;background:var(--border);border-radius:4px;margin:12px 0;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:var(--gold);border-radius:4px;transition:width 1s"></div>
-      </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">${pct}% completado</div>
-      ${ayunoState.goal ? `<div style="font-size:13px;color:var(--text);font-style:italic;margin-bottom:12px">"${ayunoState.goal}"</div>` : ''}
-      <button class="btn-ghost" onclick="endAyuno()" style="border-color:rgba(239,68,68,0.4);color:#fca5a5">Terminar ayuno</button>
-    </div>
-    <div class="card" style="margin-top:8px">
-      <div style="font-size:12px;color:var(--text-muted);font-style:italic">"Este género no sale sino con oración y ayuno." — Mateo 17:21 RVR1960</div>
-    </div>
-    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
-    return;
-  }
-  content.innerHTML = `
-  <div class="section-label">🕊 Iniciar ayuno</div>
-  <div class="card" style="margin-bottom:10px">
-    <div class="card-sub" style="font-style:italic">"Este género no sale sino con oración y ayuno." — Mateo 17:21 RVR1960</div>
-  </div>
-  ${ayunoTypes.map((t,i) => `
-  <div onclick="startAyuno(${i})" style="background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:8px;cursor:pointer">
-    <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:4px">${t.name}</div>
-    <div style="font-size:12px;color:var(--text-muted)">${t.desc}</div>
-  </div>`).join('')}
-  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
-}
-
-function startAyuno(i) {
-  const t = ayunoTypes[i];
-  const goal = prompt('¿Cuál es tu propósito de oración para este ayuno? (opcional)') || '';
-  ayunoState = { active: true, startTime: Date.now(), type: t.name, goal: Security.sanitizeText(goal), hours: t.hours };
-  userPoints += 20;
-  showToast('🕊 Ayuno iniciado +20pts');
-  openAyuno();
-}
-
-function endAyuno() {
-  ayunoState = { active: false, startTime: null, type: '', goal: '', hours: 0 };
-  showToast('Ayuno completado. ¡Gloria a Dios!');
-  showTab('home', document.getElementById('nav-home'));
-}
-
-// ═══════════════════════════════════════
-// TESTIMONIOS
-// ═══════════════════════════════════════
-let testimonios = [
-  { anon: 'Hermana anónima', time: 'hace 2 días', text: 'Dios sanó a mi hijo después de semanas de oración. ¡Su fidelidad es eterna!', likes: 45 },
-  { anon: 'Siervo del Señor', time: 'hace 5 días', text: 'Conseguí el trabajo que pedí en oración por 3 meses. Dios es fiel a sus promesas.', likes: 78 },
-  { anon: 'Guerrera de fe', time: 'hace 1 semana', text: 'Mi matrimonio fue restaurado después de mucha oración y consejería bíblica. A Dios sea la gloria.', likes: 123 },
-];
-
-function openTestimonios() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = `
-  <div class="section-label">✨ Testimonios</div>
-  <div class="post-input-area">
-    <textarea class="post-textarea" id="new-testimonio" placeholder="Comparte cómo Dios actuó en tu vida..." maxlength="400" style="min-height:70px"></textarea>
-    <div class="post-rules">Solo texto. Máximo 400 caracteres. Anónimo.</div>
-    <button class="btn-primary" style="margin-top:8px" onclick="submitTestimonio()">Compartir testimonio</button>
-  </div>
-  ${testimonios.map((t,i) => `
-  <div class="post-card">
-    <div class="post-header">
-      <span class="post-user">✨ ${t.anon}</span>
-      <span class="post-time">${t.time}</span>
-    </div>
-    <div class="post-text">${t.text}</div>
-    <div class="post-footer">
-      <button class="pray-btn" onclick="likeTestimonio(${i},this)">🙌 ${t.likes} glorias a Dios</button>
-    </div>
-  </div>`).join('')}
-  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
-}
-
-function submitTestimonio() {
-  const ta = document.getElementById('new-testimonio');
-  const text = ta.value.trim();
-  if (!text) { showToast('Escribe tu testimonio primero'); return; }
-  const clean = Security.sanitizeText(text);
-  if (Security.filterContent(clean)) { showToast(getText('post_blocked')); return; }
-  testimonios.unshift({ anon: 'Hermano anónimo', time: 'ahora', text: clean, likes: 0 });
-  ta.value = '';
-  userPoints += 15;
-  showToast('✨ Testimonio publicado +15pts');
-  openTestimonios();
-}
-
-function likeTestimonio(i, btn) {
-  testimonios[i].likes++;
-  btn.textContent = '🙌 ' + testimonios[i].likes + ' glorias a Dios';
-  showToast('🙌 ¡Gloria a Dios!');
-}
-
-// ═══════════════════════════════════════
-// COMPARTIR VERSÍCULO
-// ═══════════════════════════════════════
-function shareVerse() {
-  const ref = document.getElementById('verse-ref')?.textContent || '';
-  const text = document.getElementById('verse-text')?.textContent || '';
-  const shareText = `${text}\n— ${ref}\n\nCompartido desde MenteClara 🙏\nhttps://elestacerc4eloim-prog.github.io/menteclara`;
-  if (navigator.share) {
-    navigator.share({ title: 'Versículo del día', text: shareText }).catch(() => {});
-  } else {
-    navigator.clipboard?.writeText(shareText).then(() => showToast('📋 Copiado al portapapeles')).catch(() => showToast('Copia el texto manualmente'));
-  }
-}
-
-// ═══════════════════════════════════════
-// MODO CLARO / OSCURO
-// ═══════════════════════════════════════
-let isDarkMode = true;
-
-function toggleDarkMode() {
-  isDarkMode = !isDarkMode;
-  const root = document.documentElement;
-  if (isDarkMode) {
-    root.style.setProperty('--bg', '#0d0820');
-    root.style.setProperty('--bg2', '#1a1035');
-    root.style.setProperty('--card', '#1e1540');
-    root.style.setProperty('--text', '#e8e0ff');
-    root.style.setProperty('--text-muted', '#a89fd0');
-    root.style.setProperty('--border', '#3a2d6a');
-  } else {
-    root.style.setProperty('--bg', '#f5f3ff');
-    root.style.setProperty('--bg2', '#ede9fe');
-    root.style.setProperty('--card', '#ffffff');
-    root.style.setProperty('--text', '#1e1540');
-    root.style.setProperty('--text-muted', '#6b5fa0');
-    root.style.setProperty('--border', '#c4b5fd');
-  }
-  showToast(isDarkMode ? '🌙 Modo oscuro' : '☀️ Modo claro');
-}
-
-const personajes = [
-  { name:'David', tags:['Culpa','Arrepentimiento','Restauración'], analysis:'David enfrentó una profunda culpa tras su pecado con Betsabé. La Escritura muestra cómo el arrepentimiento genuino restauró su relación con Dios. Su Salmo 51 es el modelo bíblico del corazón contrito que busca la misericordia divina.', verse:'Crea en mí, oh Dios, un corazón limpio, y renueva un espíritu recto dentro de mí. — Salmo 51:10 RVR1960' },
-  { name:'Pablo', tags:['Ansiedad','Fe','Contentamiento'], analysis:'Pablo escribió sobre el contentamiento desde la prisión. La Escritura revela que su fortaleza no venía de circunstancias sino de Cristo. Enfrentó naufragios, azotes y cárcel con gozo porque conocía el propósito eterno de su sufrimiento.', verse:'Todo lo puedo en Cristo que me fortalece. — Filipenses 4:13 RVR1960' },
-  { name:'Elías', tags:['Agotamiento','Depresión','Restauración'], analysis:'En 1 Reyes 19, Elías pidió morir tras una gran victoria espiritual. Dios no lo reprendió sino que le dio alimento y descanso. La Biblia muestra que Dios entiende el agotamiento humano y provee cuidado práctico antes del ministerio espiritual.', verse:'Levántate y come, porque largo camino te resta. — 1 Reyes 19:7 RVR1960' },
-  { name:'José', tags:['Traición','Perdón','Propósito'], analysis:'José fue vendido por sus hermanos, falsamente acusado y encarcelado. Sin embargo la Escritura muestra que en cada valle Dios estaba con él. Su respuesta final a sus hermanos revela una comprensión madura del soberano propósito de Dios en el sufrimiento.', verse:'Vosotros pensasteis mal contra mí, mas Dios lo encaminó a bien. — Génesis 50:20 RVR1960' },
-  { name:'Pedro', tags:['Fracaso','Negación','Gracia'], analysis:'Pedro negó a Cristo tres veces con maldiciones. La Escritura muestra que Jesús lo restauró con la misma cantidad de preguntas que negaciones. La Biblia enseña que el fracaso no es el fin cuando hay arrepentimiento genuino y gracia divina.', verse:'¿Me amas? Apacienta mis ovejas. — Juan 21:17 RVR1960' },
-  { name:'Moisés', tags:['Inseguridad','Llamado','Obediencia'], analysis:'Moisés argumentó ante Dios que no sabía hablar bien. La Escritura revela que Dios no busca la capacidad humana sino la disponibilidad. Su vida muestra que la inseguridad sometida a Dios se convierte en instrumento poderoso de liberación.', verse:'¿Quién dio la boca al hombre? ¿No soy yo Jehová? — Éxodo 4:11 RVR1960' },
-  { name:'Rut', tags:['Lealtad','Fe','Redención'], analysis:'Rut eligió quedarse con Noemí en su momento de mayor pérdida. La Escritura muestra que su lealtad y fe en el Dios de Israel la llevaron a convertirse en parte del linaje mesiánico. La Biblia revela que la fidelidad en lo pequeño tiene consecuencias eternas.', verse:'Tu pueblo será mi pueblo, y tu Dios mi Dios. — Rut 1:16 RVR1960' },
-  { name:'María', tags:['Entrega','Fe','Humildad'], analysis:'María respondió al anuncio del ángel con entrega total a pesar de no entender completamente. La Escritura muestra que su disposición a ser usada por Dios, con el costo social que implicaba, es el modelo bíblico de la fe obediente.', verse:'He aquí la sierva del Señor; hágase conmigo conforme a tu palabra. — Lucas 1:38 RVR1960' },
-];
+const communityPosts = [];
 
 // ═══════════════════════════════════════
 // CHAT CON IA REAL (ANTHROPIC API)
@@ -1776,16 +1259,27 @@ const chatHistory = [
   { role:'ai', text:'Hola, estoy aquí para acompañarte en tu camino espiritual. ¿En qué puedo ayudarte hoy? Puedo guiarte con versículos de la RVR1960, reflexión bíblica o simplemente escucharte.' },
 ];
 
-const CHAT_SYSTEM_PROMPT = `Eres un asistente espiritual bíblico dentro de la app MenteClara. 
-REGLAS ESTRICTAS:
-- Solo usas la Biblia Reina Valera 1960 (RVR1960) como fuente
-- Siempre citas capítulo y versículo cuando usas la Escritura
-- No das consejos psicológicos seculares — solo Escritura aplicada
-- Eres cálido, empático y breve (máximo 3-4 oraciones por respuesta)
-- Si alguien menciona crisis severa o suicidio, dirige a línea de ayuda: 800-290-0024 (México)
-- No sustituyes terapia profesional ni consejería pastoral
+const CHAT_SYSTEM_PROMPT = `Eres un asistente espiritual bíblico dentro de MenteClara. Tu nombre es "IA Bíblica".
+
+PERSONALIDAD:
+- Cálido, cercano y empático — como un amigo espiritual maduro
+- Breve y directo (2-3 oraciones máximo salvo que pidan más)
+- Natural y conversacional — no siempre predicas, a veces solo escuchas
+
+DETECCIÓN DE CONTEXTO:
+- Si el usuario solo saluda (hola, buenos días, etc.) → responde el saludo brevemente y pregunta cómo puedes ayudar
+- Si agradece o se despide (gracias, adiós, hasta luego, bendiciones) → responde con calidez y cierra la conversación naturalmente, NO sigas enviando versículos
+- Si pide un versículo o guía bíblica → usa la Reina Valera 1909 citando referencia exacta
+- Si comparte algo personal → escucha primero, luego pregunta si quiere un versículo relacionado
+- Si hace preguntas generales no espirituales → redirige gentilmente hacia lo espiritual o di que no puedes ayudar con eso
+
+REGLAS:
+- Fuente exclusiva: Reina Valera 1909 (dominio público) — cita libro, capítulo y versículo
+- Si detectas crisis o suicidio → da línea de ayuda México: 800-290-0024 y detente
+- No eres terapeuta ni pastor — eres un acompañante espiritual
 - Responde siempre en el idioma del usuario
-- No comentas sobre política, noticias o temas no espirituales`;
+- Nunca des consejos médicos, legales o financieros
+- No comentes política, noticias ni temas no espirituales`;
 
 let chatApiMessages = [];
 let chatLoading = false;
@@ -1898,16 +1392,11 @@ function renderHome() {
   return `
   <div class="section-label">${getText('sec_stats')}</div>
   <div class="stats-grid">
-    <div class="stat-card" onclick="openAchievements()" style="cursor:pointer"><div class="stat-num">14</div><div class="stat-label">${getText('stat_streak')}</div></div>
-    <div class="stat-card"><div class="stat-num">847</div><div class="stat-label">${getText('stat_praying')}</div></div>
+    <div class="stat-card" onclick="openAchievements()" style="cursor:pointer"><div class="stat-num" id="stat-streak-num">${getStreak()}</div><div class="stat-label">${getText('stat_streak')}</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-praying-num">${getPrayingCount()}</div><div class="stat-label">${getText('stat_praying')}</div></div>
     <div class="stat-card" onclick="openAchievements()" style="cursor:pointer"><div class="stat-num">${earnedCount}</div><div class="stat-label">${getText('stat_goals')}</div></div>
   </div>
-  <div class="streak">
-    <div class="streak-day s-done">L</div><div class="streak-day s-done">M</div>
-    <div class="streak-day s-done">M</div><div class="streak-day s-today">J</div>
-    <div class="streak-day s-empty">V</div><div class="streak-day s-empty">S</div>
-    <div class="streak-day s-empty">D</div>
-  </div>
+  <div class="streak">${renderStreakDays()}</div>
   <div style="background:var(--card);border:0.5px solid rgba(232,201,122,0.2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAchievements()">
     <div style="font-size:20px">⭐</div>
     <div style="flex:1">
@@ -2018,6 +1507,11 @@ function renderComunidad() {
   <div class="post-input-area">
     <textarea class="post-textarea" id="new-post" placeholder="${getText('com_placeholder')}" maxlength="300" oninput="document.getElementById('char-count').textContent=this.value.length+'/300'"></textarea>
     <div class="char-count" id="char-count">0/300</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <button onclick="autocorrectPost()" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text-muted);cursor:pointer">✏️ Autocorregir</button>
+      <button onclick="translatePost()" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text-muted);cursor:pointer">🌐 Traducir</button>
+    </div>
+    <div id="translate-result" style="display:none;background:var(--bg3);border:0.5px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:var(--text)"></div>
     <div class="post-rules">${getText('com_rules')}</div>
     <button class="btn-primary" onclick="submitPost()">${getText('com_btn')}</button>
   </div>
@@ -2145,6 +1639,57 @@ function togglePray(i, btn) {
   communityPosts[i].praying++;
   btn.querySelector('span').textContent = communityPosts[i].praying + ' ' + getText('praying');
   showToast('🙏 ' + getText('praying'));
+}
+
+async function autocorrectPost() {
+  const ta = document.getElementById('new-post');
+  const text = ta.value.trim();
+  if (!text) { showToast('Escribe algo primero'); return; }
+  showToast('Corrigiendo...');
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: 'Corrige ortografia y gramatica del siguiente texto. Solo devuelve el texto corregido: ' + text }]
+      })
+    });
+    const data = await res.json();
+    const corrected = data.content && data.content[0] ? data.content[0].text.trim() : text;
+    ta.value = corrected;
+    document.getElementById('char-count').textContent = corrected.length + '/300';
+    showToast('✓ Texto corregido');
+  } catch(e) {
+    showToast('Error al corregir. Intenta de nuevo.');
+  }
+}
+
+async function translatePost() {
+  const ta = document.getElementById('new-post');
+  const text = ta.value.trim();
+  if (!text) { showToast('Escribe algo primero'); return; }
+  const resultDiv = document.getElementById('translate-result');
+  resultDiv.style.display = 'block';
+  resultDiv.textContent = 'Traduciendo...';
+  const targetLangs = currentLang === 'es' ? 'inglés y portugués' : 'español e inglés';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: 'Traduce al ' + targetLangs + '. Una traduccion por linea con [idioma] al inicio. Solo traducciones, sin explicaciones: ' + text }]
+      })
+    });
+    const data = await res.json();
+    const translated = data.content && data.content[0] ? data.content[0].text.trim() : '';
+    resultDiv.innerHTML = '<div style="font-size:11px;color:var(--gold);margin-bottom:6px">Traducciones:</div>' + translated.replace(/\n/g, '<br>');
+  } catch(e) {
+    resultDiv.textContent = 'Error al traducir. Intenta de nuevo.';
+  }
 }
 
 async function submitPost() {
@@ -2431,9 +1976,10 @@ async function openBibleSearch() {
   content.innerHTML = `
   <div class="section-label">📖 Buscar versículo</div>
   <div class="post-input-area">
-    <input class="field-input" type="text" id="bible-search-input" placeholder="Ej: Juan 3:16, Salmos 23, paz, esperanza..." style="margin-bottom:8px">
-    <button class="btn-primary" onclick="searchBible()">Buscar en RVR1960</button>
+    <input class="field-input" type="text" id="bible-search-input" placeholder="Ej: paz, amor, Juan 3, Salmo 23..." style="margin-bottom:8px" onkeyup="if(event.key==='Enter')searchBible()">
+    <button class="btn-primary" onclick="searchBible()">Buscar</button>
   </div>
+  <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Puedes escribir una palabra, un tema o una referencia bíblica</div>
   <div id="bible-results"></div>
   <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
 }
@@ -2482,10 +2028,7 @@ async function searchBible() {
 // ═══════════════════════════════════════
 // DIARIO DE ORACIÓN
 // ═══════════════════════════════════════
-let diaryEntries = [
-  { id:1, date:'2026-07-01', petition:'Salud de mi madre', answer:'', status:'pendiente' },
-  { id:2, date:'2026-06-28', petition:'Trabajo para mi hermano', answer:'¡Dios lo proveyó!', status:'respondida' },
-];
+let diaryEntries = [];
 
 function openDiary() {
   const content = document.getElementById('main-content');
@@ -2879,10 +2422,7 @@ function nextQuizQuestion() {
 // ═══════════════════════════════════════
 // RESALTADO Y NOTAS DE VERSÍCULOS
 // ═══════════════════════════════════════
-let savedVerses = [
-  { ref:'Filipenses 4:13', text:'"Todo lo puedo en Cristo que me fortalece."', color:'#6b4fd8', note:'Mi versículo favorito', date:'2026-07-01' },
-  { ref:'Salmo 23:1', text:'"Jehová es mi pastor; nada me faltará."', color:'#e8c97a', note:'', date:'2026-06-28' },
-];
+let savedVerses = [];
 const highlightColors = ['#6b4fd8','#e8c97a','#10b981','#f472b6','#60a5fa'];
 
 function openSavedVerses() {
