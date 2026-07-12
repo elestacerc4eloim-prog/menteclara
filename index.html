@@ -624,6 +624,26 @@ setInterval(() => {
 // ═══════════════════════════════════════
 let currentLang = 'es';
 let isDarkMode = localStorage.getItem('mc_dark') === 'true';
+let bibleVersion = localStorage.getItem('mc_bible_version') || 'rv1909';
+function setBibleVersion(v) {
+  bibleVersion = v;
+  localStorage.setItem('mc_bible_version', v);
+  renderHome();
+  updateVerseDisplay();
+}
+function openVersionBiblica() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">📖 Versión de la Biblia</div>
+  <div class="card-sub" style="margin-bottom:14px">Elige qué traducción usar para el versículo diario y el buscador.</div>
+  <div class="mod-card" onclick="setBibleVersion('rv1909')" style="${bibleVersion==='rv1909' ? 'border-color:var(--gold)' : ''}">
+    <div class="mod-info"><div class="mod-name">Reina Valera 1909${bibleVersion==='rv1909' ? ' ✓' : ''}</div><div class="mod-desc">Dominio público. Funciona sin conexión a internet.</div></div>
+  </div>
+  <div class="mod-card" onclick="setBibleVersion('rvr1960')" style="${bibleVersion==='rvr1960' ? 'border-color:var(--gold)' : ''}">
+    <div class="mod-info"><div class="mod-name">Reina Valera 1960${bibleVersion==='rvr1960' ? ' ✓' : ''}</div><div class="mod-desc">Requiere conexión y clave de API.Bible configurada.</div></div>
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
 function toggleDarkMode() {
   isDarkMode = !isDarkMode;
   localStorage.setItem('mc_dark', isDarkMode);
@@ -1304,7 +1324,7 @@ REGLAS:
 let chatApiMessages = [];
 let chatLoading = false;
 let chatMsgsToday = 0;
-const CHAT_DAILY_LIMIT = 15;
+const CHAT_DAILY_LIMIT = 5;
 
 function getChatLimitKey() {
   return 'chat_' + new Date().toISOString().split('T')[0];
@@ -1325,6 +1345,12 @@ function saveChatLimit() {
 }
 
 loadChatLimit();
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
 
 async function sendChat() {
   if (chatLoading) return;
@@ -1362,9 +1388,9 @@ async function sendChat() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
+        max_tokens: 400,
         system: CHAT_SYSTEM_PROMPT,
-        messages: chatApiMessages
+        messages: chatApiMessages.slice(-6)
       })
     });
     const data = await response.json();
@@ -1372,12 +1398,12 @@ async function sendChat() {
     chatApiMessages.push({ role: 'assistant', content: reply });
     chatHistory.push({ role: 'ai', text: reply });
     const thinking = document.getElementById('thinking');
-    if (thinking) thinking.outerHTML = `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${reply}</div></div>`;
+    if (thinking) thinking.outerHTML = `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${escapeHtml(reply)}</div></div>`;
   } catch(e) {
     const reply = fallbackReply(clean);
     chatHistory.push({ role: 'ai', text: reply });
     const thinking = document.getElementById('thinking');
-    if (thinking) thinking.outerHTML = `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${reply}</div></div>`;
+    if (thinking) thinking.outerHTML = `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${escapeHtml(reply)}</div></div>`;
   }
   
   chatLoading = false;
@@ -1406,7 +1432,27 @@ function showTab(tab, btn) {
   else if (tab === 'chat') content.innerHTML = renderChat();
 }
 
+const levelTiers = [
+  { level:1, name:'Semilla', min:0 },
+  { level:2, name:'Brote', min:50 },
+  { level:3, name:'Raíz Firme', min:150 },
+  { level:4, name:'Árbol Fructífero', min:300 },
+  { level:5, name:'Roble de Fe', min:600 },
+  { level:6, name:'Discípulo Fiel', min:1200 },
+];
+function getUserPoints() {
+  return (getStreak()*10) + (savedVerses.length*5) + (diaryEntries.length*5) + (quizState.score*10);
+}
+function getLevel(points) {
+  let idx = 0;
+  for (let i = 0; i < levelTiers.length; i++) { if (points >= levelTiers[i].min) idx = i; }
+  const current = levelTiers[idx];
+  const nextTier = levelTiers[idx+1];
+  return { level: current.level, name: current.name, next: nextTier ? nextTier.min : current.min + 100 };
+}
+
 function renderHome() {
+  const userPoints = getUserPoints();
   const lvl = getLevel(userPoints);
   const earnedCount = achievements.filter(a=>a.earned).length;
   return `
@@ -1448,7 +1494,7 @@ function renderHome() {
   </div>
   <div class="mod-card" onclick="openBibleSearch()">
     <div class="mod-icon" style="background:#0a1a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-    <div class="mod-info"><div class="mod-name">Buscar versículo</div><div class="mod-desc">Busca en toda la RVR1960 en vivo</div></div>
+    <div class="mod-info"><div class="mod-name">Buscar versículo</div><div class="mod-desc">${bibleVersion === 'rv1909' ? 'Busca en la Reina Valera 1909' : 'Busca en toda la RVR1960 en vivo'}</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
   <div class="mod-card" onclick="openNotificaciones()">
@@ -1474,6 +1520,11 @@ function renderHome() {
   <div class="mod-card" onclick="toggleDarkMode()">
     <div class="mod-icon" style="background:#1a1a0a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fde68a" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></div>
     <div class="mod-info"><div class="mod-name">${isDarkMode ? 'Modo claro' : 'Modo oscuro'}</div><div class="mod-desc">Cambia el tema visual de la app</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openVersionBiblica()">
+    <div class="mod-icon" style="background:#0a1a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Versión de la Biblia</div><div class="mod-desc">${bibleVersion === 'rv1909' ? 'Reina Valera 1909 (clásica)' : 'Reina Valera 1960 (en vivo)'}</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
   <div class="mod-card" onclick="openQuiz()">
@@ -1805,6 +1856,17 @@ function resetTimer() {
   if (btn) btn.textContent = 'Iniciar';
 }
 
+const personajes = [
+  { name:'David', tags:['Rey','Pastor','Salmista'], analysis:'Ungido pastor que llegó a ser rey. Hombre conforme al corazón de Dios, cometió graves errores (adulterio, homicidio) pero se arrepintió profundamente cuando fue confrontado. Sus salmos muestran una relación honesta y vulnerable con Dios.', verse:'"Jehová es mi pastor; nada me faltará." — Salmos 23:1' },
+  { name:'María, madre de Jesús', tags:['Fe','Obediencia'], analysis:'Joven virgen que aceptó con humildad el llamado de ser madre del Mesías, aun sin entender completamente lo que implicaba. Guardaba las cosas en su corazón, meditando sobre ellas.', verse:'"He aquí la sierva del Señor; hágase conmigo conforme a tu palabra." — Lucas 1:38' },
+  { name:'Moisés', tags:['Libertador','Legislador'], analysis:'Criado en el palacio de Faraón, huyó tras matar a un egipcio. Dios lo llamó desde una zarza ardiente para liberar a Israel de la esclavitud, a pesar de sus dudas sobre su capacidad para hablar.', verse:'"¿Quién soy yo, para que vaya a Faraón?" — Éxodo 3:11' },
+  { name:'Pablo (Saulo de Tarso)', tags:['Apóstol','Misionero'], analysis:'Perseguidor de los primeros cristianos, transformado radicalmente tras encontrarse con Jesús en el camino a Damasco. Se convirtió en el apóstol más prolífico, escribiendo gran parte del Nuevo Testamento.', verse:'"Para mí el vivir es Cristo, y el morir es ganancia." — Filipenses 1:21' },
+  { name:'Abraham', tags:['Padre de la fe','Patriarca'], analysis:'Llamado por Dios a dejar su tierra sin saber a dónde iba. Su fe fue puesta a prueba de manera extrema al pedirle sacrificar a su hijo Isaac, pero confió en que Dios proveería.', verse:'"Y creyó Abram a Jehová, y le fue contado por justicia." — Génesis 15:6' },
+  { name:'Rut', tags:['Lealtad','Redención'], analysis:'Moabita que eligió quedarse con su suegra Noemí en vez de regresar a su pueblo, abrazando un Dios y un pueblo que no eran los suyos. Su lealtad fue recompensada al convertirse en antepasada del rey David.', verse:'"Porque a dondequiera que tú fueres, iré yo... tu pueblo será mi pueblo, y tu Dios mi Dios." — Rut 1:16' },
+  { name:'Pedro', tags:['Discípulo','Apóstol'], analysis:'Pescador impulsivo que negó conocer a Jesús tres veces la misma noche que juró no hacerlo. Restaurado por Jesús después de la resurrección, se convirtió en un líder firme de la iglesia primitiva.', verse:'"Y saliendo Pedro, lloró amargamente." — Lucas 22:62' },
+  { name:'Job', tags:['Paciencia','Sufrimiento'], analysis:'Hombre íntegro que perdió su familia, salud y riqueza en un solo golpe. A pesar de no entender el porqué de su sufrimiento, se negó a maldecir a Dios, aunque cuestionó y lamentó profundamente su condición.', verse:'"Jehová dio, y Jehová quitó; sea el nombre de Jehová bendito." — Job 1:21' },
+];
+
 function openPersonajes() {
   const content = document.getElementById('main-content');
   content.innerHTML = `
@@ -1932,8 +1994,8 @@ const dailyVerses = {
 };
 
 async function fetchDailyVerse() {
-  // Si no hay API key configurada, usa RV1909 (dominio público)
-  if (BIBLE_API_KEY === 'TU_API_KEY_AQUI') {
+  // Si el usuario eligió RV1909 manualmente, o no hay API key configurada, usa RV1909 (dominio público)
+  if (bibleVersion === 'rv1909' || BIBLE_API_KEY === 'TU_API_KEY_AQUI') {
     if (currentLang === 'es') return getRV1909Diario();
     // Para otros idiomas, versículos predefinidos
     const verses = {
@@ -2012,7 +2074,7 @@ async function searchBible() {
 
   const localResults = buscarRV1909(q);
 
-  if (BIBLE_API_KEY === 'TU_API_KEY_AQUI') {
+  if (bibleVersion === 'rv1909' || BIBLE_API_KEY === 'TU_API_KEY_AQUI') {
     if (localResults.length) {
       results.innerHTML = '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Resultados en Reina Valera 1909</div>' +
         localResults.map(function(v) {
@@ -2444,6 +2506,160 @@ function nextQuizQuestion() {
 // ═══════════════════════════════════════
 let savedVerses = [];
 const highlightColors = ['#6b4fd8','#e8c97a','#10b981','#f472b6','#60a5fa'];
+
+// ═══════════════════════════════════════
+// LOGROS
+// ═══════════════════════════════════════
+const achievements = [
+  { id:'racha3', name:'Constancia inicial', desc:'Manten una racha de 3 días', check:() => getStreak() >= 3 },
+  { id:'racha7', name:'Una semana con Dios', desc:'Manten una racha de 7 días', check:() => getStreak() >= 7 },
+  { id:'racha30', name:'Un mes de fe', desc:'Manten una racha de 30 días', check:() => getStreak() >= 30 },
+  { id:'primerVerso', name:'Primer tesoro', desc:'Guarda tu primer versículo', check:() => savedVerses.length >= 1 },
+  { id:'coleccionista', name:'Coleccionista', desc:'Guarda 10 versículos', check:() => savedVerses.length >= 10 },
+  { id:'primerDiario', name:'Primera petición', desc:'Escribe tu primera petición de oración', check:() => diaryEntries.length >= 1 },
+  { id:'quizPerfecto', name:'Conocedor de la Palabra', desc:'Responde correctamente todo el quiz', check:() => quizState.score > 0 && quizState.score === quizState.current },
+];
+achievements.forEach(a => { a.earned = false; try { a.earned = !!a.check(); } catch(e) {} });
+
+function openAchievements() {
+  achievements.forEach(a => { try { a.earned = !!a.check(); } catch(e) {} });
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">🏆 Logros</div>
+  <div class="card-sub" style="margin-bottom:14px">${achievements.filter(a=>a.earned).length} de ${achievements.length} conseguidos</div>
+  ${achievements.map(a => `
+  <div class="card" style="margin-bottom:8px;opacity:${a.earned ? '1' : '0.5'}">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:22px">${a.earned ? '🏆' : '🔒'}</div>
+      <div><div style="font-weight:600;font-size:14px;color:var(--text)">${a.name}</div><div class="card-sub">${a.desc}</div></div>
+    </div>
+  </div>`).join('')}
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// TRACKER DE AYUNO
+// ═══════════════════════════════════════
+let ayunoState = JSON.parse(localStorage.getItem('mc_ayuno') || '{"active":false,"type":null,"startDate":null}');
+const ayunoTipos = [
+  { id:'total', name:'Ayuno total', desc:'Sin alimentos, solo líquidos' },
+  { id:'parcial', name:'Ayuno parcial', desc:'Una comida al día' },
+  { id:'daniel', name:'Ayuno de Daniel', desc:'Solo frutas, vegetales y agua' },
+  { id:'medios', name:'Ayuno de medios', desc:'Sin redes sociales ni entretenimiento' },
+];
+function saveAyunoState() { localStorage.setItem('mc_ayuno', JSON.stringify(ayunoState)); }
+function startAyuno(tipoId) {
+  ayunoState = { active:true, type:tipoId, startDate: new Date().toISOString() };
+  saveAyunoState();
+  openAyuno();
+}
+function endAyuno() {
+  ayunoState = { active:false, type:null, startDate:null };
+  saveAyunoState();
+  openAyuno();
+}
+function openAyuno() {
+  const content = document.getElementById('main-content');
+  if (ayunoState.active) {
+    const tipo = ayunoTipos.find(t => t.id === ayunoState.type) || ayunoTipos[0];
+    const dias = Math.floor((Date.now() - new Date(ayunoState.startDate).getTime()) / 86400000);
+    content.innerHTML = `
+    <div class="section-label">🕊 Ayuno en progreso</div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;font-size:15px;color:var(--text)">${tipo.name}</div>
+      <div class="card-sub">${tipo.desc}</div>
+      <div style="margin-top:10px;font-size:13px;color:var(--gold)">Día ${dias + 1}</div>
+    </div>
+    <button class="btn-primary" onclick="endAyuno()">Terminar ayuno</button>
+    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+  } else {
+    content.innerHTML = `
+    <div class="section-label">🕊 Tracker de ayuno</div>
+    <div class="card-sub" style="margin-bottom:14px">Elige el tipo de ayuno que deseas comenzar.</div>
+    ${ayunoTipos.map(t => `
+    <div class="mod-card" onclick="startAyuno('${t.id}')">
+      <div class="mod-info"><div class="mod-name">${t.name}</div><div class="mod-desc">${t.desc}</div></div>
+    </div>`).join('')}
+    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+  }
+}
+
+// ═══════════════════════════════════════
+// PLANES PARA IGLESIAS
+// ═══════════════════════════════════════
+function openChurchPlans() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">⛪ Planes para iglesias y pastores</div>
+  <div class="card-sub" style="margin-bottom:14px">Herramientas para acompañar a tu congregación.</div>
+  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Básico — $1 USD/mes</div><div class="card-sub">Acceso premium para tu congregación</div></div>
+  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Iglesia — $5 USD/mes</div><div class="card-sub">Hasta 50 miembros con seguimiento pastoral</div></div>
+  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Ministerio — $10 USD/mes</div><div class="card-sub">Miembros ilimitados y reportes de crecimiento</div></div>
+  <div class="card-sub" style="margin-top:8px">Para activar un plan, contáctanos desde la sección de soporte.</div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// MÚSICA WORSHIP
+// ═══════════════════════════════════════
+function openMusic() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">🎵 Música worship</div>
+  <div class="card-sub" style="margin-bottom:14px">Adoración instrumental para acompañar tus momentos de oración.</div>
+  <div class="card"><div class="card-sub">Las pistas de audio están en preparación y llegarán muy pronto. Vuelve a visitar esta sección en la próxima actualización.</div></div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// TESTIMONIOS
+// ═══════════════════════════════════════
+let testimonios = JSON.parse(localStorage.getItem('mc_testimonios') || '[]');
+function saveTestimonios() { localStorage.setItem('mc_testimonios', JSON.stringify(testimonios)); }
+function submitTestimonio() {
+  const input = document.getElementById('testimonio-input');
+  const clean = Security.sanitizeText((input.value || '').trim());
+  if (!clean) return;
+  testimonios.unshift({ text: clean, date: new Date().toISOString().split('T')[0] });
+  saveTestimonios();
+  openTestimonios();
+}
+function openTestimonios() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">✨ Testimonios</div>
+  <div class="card-sub" style="margin-bottom:10px">Comparte cómo Dios actuó en tu vida.</div>
+  <div class="post-input-area">
+    <textarea class="field-input" id="testimonio-input" placeholder="Escribe tu testimonio..." style="min-height:80px;margin-bottom:8px"></textarea>
+    <button class="btn-primary" onclick="submitTestimonio()">Compartir testimonio</button>
+  </div>
+  <div style="margin-top:14px">
+  ${testimonios.length === 0 ? '<div class="card"><div class="card-sub">Aún no has compartido testimonios.</div></div>' :
+  testimonios.map(t => `
+  <div class="card" style="margin-bottom:8px">
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${t.date}</div>
+    <div style="font-size:13px;color:var(--text)">${t.text}</div>
+  </div>`).join('')}
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// COMPARTIR VERSÍCULO
+// ═══════════════════════════════════════
+async function shareVerse() {
+  const ref = document.getElementById('verse-ref') ? document.getElementById('verse-ref').textContent : '';
+  const text = document.getElementById('verse-text') ? document.getElementById('verse-text').textContent : '';
+  const shareText = `${text}\n— ${ref}\n\nMenteClara — Tu espacio de oración y devoción`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ text: shareText });
+    } else {
+      await navigator.clipboard.writeText(shareText);
+      alert('Versículo copiado al portapapeles');
+    }
+  } catch(e) {}
+}
 
 function openSavedVerses() {
   const content = document.getElementById('main-content');
