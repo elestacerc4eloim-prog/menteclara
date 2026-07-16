@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://elestacerc4eloim-prog.github.io/menteclara/sitemap.xml
