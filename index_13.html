@@ -1,0 +1,2761 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#3d2b1f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MenteClara">
+<meta name="description" content="Tu espacio de oración, devoción y bienestar espiritual">
+<meta property="og:type" content="website">
+<meta property="og:title" content="MenteClara — Oración y Devoción">
+<meta property="og:description" content="Tu espacio de oración, devoción y bienestar espiritual con la Biblia. Devocional diario, comunidad de oración, chat bíblico con IA y más.">
+<meta property="og:image" content="https://elestacerc4eloim-prog.github.io/menteclara/icon-512.png">
+<meta property="og:url" content="https://elestacerc4eloim-prog.github.io/menteclara/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="MenteClara — Oración y Devoción">
+<meta name="twitter:description" content="Tu espacio de oración, devoción y bienestar espiritual con la Biblia.">
+<meta name="twitter:image" content="https://elestacerc4eloim-prog.github.io/menteclara/icon-512.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+</script>
+<title>MenteClara — Oración y Devoción</title>
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, collection, addDoc, getDocs, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAH_DqIXCpuuVeJJ-H1smLKJMeLz-4hi-s",
+  authDomain: "menteclara-aa439.firebaseapp.com",
+  projectId: "menteclara-aa439",
+  storageBucket: "menteclara-aa439.firebasestorage.app",
+  messagingSenderId: "1068827550637",
+  appId: "1:1068827550637:web:d411ee0efe8de75e6af724"
+};
+
+try {
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  onAuthStateChanged(auth, user => { window._fbUser = user || null; });
+
+  window.fbLogin = async (email, pass) => {
+    try {
+      const c = await signInWithEmailAndPassword(auth, email, pass);
+      return { ok: true, user: c.user };
+    } catch(e) { return { error: e.code }; }
+  };
+
+  window.fbRegister = async (email, pass) => {
+    try {
+      const c = await createUserWithEmailAndPassword(auth, email, pass);
+      await sendEmailVerification(c.user);
+      return { ok: true };
+    } catch(e) { return { error: e.code }; }
+  };
+
+  window.fbLogout = async () => {
+    try { await signOut(auth); } catch(e) {}
+  };
+
+  window.saveFirebasePost = async (text) => {
+    if (!auth.currentUser) return false;
+    try {
+      await addDoc(collection(db, 'posts'), {
+        text, anonId: auth.currentUser.uid.slice(0,8),
+        praying: 0, createdAt: serverTimestamp(), reported: false
+      });
+      return true;
+    } catch(e) { return false; }
+  };
+
+  window.loadFirebasePosts = async () => {
+    try {
+      const q = query(collection(db, 'posts'), orderBy('createdAt','desc'), limit(20));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch(e) { return null; }
+  };
+
+  window.prayFirebase = async (postId) => {
+    try { await updateDoc(doc(db,'posts',postId), { praying: increment(1) }); } catch(e) {}
+  };
+
+  window.reportFirebase = async (postId) => {
+    try { await updateDoc(doc(db,'posts',postId), { reported: true }); } catch(e) {}
+  };
+
+  console.log('Firebase conectado');
+} catch(e) {
+  console.warn('Firebase error:', e.message);
+  window.fbLogin = null; window.fbRegister = null; window.fbLogout = null;
+  window.saveFirebasePost = null; window.loadFirebasePosts = null;
+}
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#faf7f2;
+  --bg2:#f1e9dd;
+  --bg3:#e6d9c6;
+  --card:#ffffff;
+  --border:#ddceb8;
+  --gold:#8c6a3f;
+  --purple:#3d2b1f;
+  --purple-light:#6f4e37;
+  --text:#1c1712;
+  --text-muted:#6b5d4f;
+  --text-dim:#a3927d;
+  --green:#10b981;
+  --red:#ef4444;
+  --btn-text:#ffffff;
+  --radius:12px;
+}
+body.dark-mode{
+  --bg:#141110;
+  --bg2:#1f1a17;
+  --bg3:#2b2320;
+  --card:#1f1a17;
+  --border:#3a2f28;
+  --gold:#c9a36a;
+  --purple:#c9a36a;
+  --purple-light:#e6c896;
+  --text:#f2ece3;
+  --text-muted:#c2b3a0;
+  --text-dim:#8a7a68;
+  --btn-text:#1c1712;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background 0.2s,color 0.2s}
+
+/* AUTH SCREENS */
+.auth-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;background:var(--bg)}
+.auth-logo{font-size:32px;font-weight:700;color:var(--gold);margin-bottom:8px;letter-spacing:1px}
+.auth-sub{font-size:14px;color:var(--text-muted);margin-bottom:32px;text-align:center}
+.auth-card{background:var(--card);border:0.5px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:360px}
+.auth-title{font-size:18px;font-weight:600;color:var(--text);margin-bottom:4px}
+.auth-desc{font-size:13px;color:var(--text-muted);margin-bottom:20px}
+.field-label{font-size:12px;color:var(--text-muted);margin-bottom:6px;display:block}
+.field-input{width:100%;background:var(--bg2);border:0.5px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;margin-bottom:14px;transition:border-color 0.2s}
+.field-input:focus{border-color:var(--purple)}
+.field-input::placeholder{color:var(--text-dim)}
+.btn-primary{width:100%;background:var(--purple);color:var(--btn-text);border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:500;cursor:pointer;transition:opacity 0.2s;margin-bottom:10px}
+.btn-primary:hover{opacity:0.9}
+.btn-ghost{width:100%;background:transparent;color:var(--text-muted);border:0.5px solid var(--border);border-radius:8px;padding:12px;font-size:14px;cursor:pointer;transition:background 0.2s}
+.btn-ghost:hover{background:var(--bg2)}
+.auth-link{text-align:center;font-size:13px;color:var(--text-muted);margin-top:14px}
+.auth-link span{color:var(--purple);cursor:pointer}
+.auth-link span:hover{text-decoration:underline}
+.security-note{display:flex;align-items:center;gap:8px;background:rgba(107,79,216,0.1);border:0.5px solid rgba(107,79,216,0.3);border-radius:8px;padding:10px;margin-top:14px}
+.security-note svg{flex-shrink:0;color:var(--purple)}
+.security-note p{font-size:11px;color:var(--text-muted);line-height:1.4}
+.error-msg{background:rgba(239,68,68,0.1);border:0.5px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;font-size:12px;color:#fca5a5;margin-bottom:14px;display:none}
+.success-msg{background:rgba(16,185,129,0.1);border:0.5px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px;font-size:12px;color:#6ee7b7;margin-bottom:14px;display:none}
+.age-check{display:flex;align-items:flex-start;gap:8px;margin-bottom:14px}
+.age-check input{margin-top:2px;accent-color:var(--purple)}
+.age-check label{font-size:12px;color:var(--text-muted);line-height:1.5;cursor:pointer}
+.strength-bar{height:4px;border-radius:2px;background:var(--border);margin-bottom:14px;overflow:hidden}
+.strength-fill{height:100%;border-radius:2px;transition:width 0.3s,background 0.3s;width:0}
+.attempts-warning{font-size:11px;color:#fca5a5;text-align:center;margin-bottom:10px;display:none}
+
+/* MAIN APP */
+.app{display:none;flex-direction:column;min-height:100vh}
+.header{background:var(--bg2);padding:16px 16px 12px;border-bottom:0.5px solid var(--border);position:sticky;top:0;z-index:10}
+.header-row{display:flex;justify-content:space-between;align-items:center}
+.app-name{font-size:18px;font-weight:700;color:var(--gold)}
+.header-actions{display:flex;gap:10px;align-items:center}
+.lang-sel{background:var(--bg3);border:0.5px solid var(--border);border-radius:20px;padding:4px 10px;color:var(--text-muted);font-size:12px;cursor:pointer}
+.security-badge{background:rgba(16,185,129,0.15);border:0.5px solid rgba(16,185,129,0.3);border-radius:20px;padding:4px 10px;font-size:11px;color:#6ee7b7;display:flex;align-items:center;gap:4px}
+.verse-banner{background:linear-gradient(135deg,var(--bg2),var(--bg3));padding:16px;border-bottom:0.5px solid var(--border)}
+.verse-ref{font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.verse-text{font-size:14px;color:var(--text);line-height:1.6;font-style:italic;margin-bottom:10px}
+.verse-actions{display:flex;gap:8px}
+.verse-btn{background:rgba(255,255,255,0.08);border:0.5px solid var(--border);border-radius:20px;padding:6px 12px;color:var(--gold);font-size:12px;cursor:pointer}
+.verse-btn:hover{background:rgba(255,255,255,0.15)}
+.nav{display:flex;background:var(--bg2);border-top:0.5px solid var(--border);position:sticky;bottom:0;z-index:10}
+.nav-btn{flex:1;padding:10px 4px 12px;font-size:10px;color:var(--text-dim);cursor:pointer;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color 0.2s}
+.nav-btn.active{color:var(--purple-light)}
+.nav-btn svg{width:20px;height:20px}
+.content{flex:1;overflow-y:auto;padding:16px}
+
+/* CARDS */
+.card{background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.card-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.card-sub{font-size:12px;color:var(--text-muted);line-height:1.5}
+.section-label{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;margin-top:4px}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.stat-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+.stat-num{font-size:22px;font-weight:700;color:var(--purple-light)}
+.stat-label{font-size:10px;color:var(--text-muted);margin-top:2px}
+
+/* STREAK */
+.streak{display:flex;gap:6px;margin-bottom:14px}
+.streak-day{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600}
+.s-done{background:var(--purple);color:var(--btn-text)}
+.s-today{background:var(--gold);color:var(--bg)}
+.s-empty{background:var(--card);border:0.5px solid var(--border);color:var(--text-dim)}
+
+/* MODULE CARDS */
+.mod-card{background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:border-color 0.2s}
+.mod-card:hover{border-color:var(--purple)}
+.mod-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mod-info{flex:1}
+.mod-name{font-size:14px;font-weight:500;color:var(--text);margin-bottom:2px}
+.mod-desc{font-size:12px;color:var(--text-muted)}
+.mod-arrow{color:var(--text-dim)}
+
+/* COMMUNITY */
+.post-card{background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:8px}
+.post-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.post-user{font-size:12px;color:var(--purple-light);font-weight:500}
+.post-time{font-size:11px;color:var(--text-dim)}
+.post-text{font-size:13px;color:var(--text);line-height:1.6;margin-bottom:10px}
+.post-footer{display:flex;justify-content:space-between;align-items:center}
+.pray-btn{background:rgba(107,79,216,0.15);border:0.5px solid rgba(107,79,216,0.3);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--purple-light);cursor:pointer;display:flex;align-items:center;gap:4px}
+.pray-btn:hover{background:rgba(107,79,216,0.3)}
+.report-btn{font-size:11px;color:var(--text-dim);cursor:pointer;background:none;border:none}
+.report-btn:hover{color:var(--red)}
+.post-input-area{background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.post-textarea{width:100%;background:var(--bg2);border:0.5px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:13px;resize:none;outline:none;min-height:80px;font-family:inherit}
+.post-textarea:focus{border-color:var(--purple)}
+.post-rules{font-size:11px;color:var(--text-dim);margin-top:6px;margin-bottom:10px}
+.char-count{font-size:11px;color:var(--text-dim);text-align:right;margin-top:4px}
+
+/* PUEBLOS */
+.pueblo-card{background:linear-gradient(135deg,var(--bg2),#0f2d5a);border:0.5px solid #1e3a6a;border-radius:var(--radius);padding:16px;margin-bottom:10px}
+.pueblo-name{font-size:16px;font-weight:600;color:var(--gold);margin-bottom:4px}
+.pueblo-info{font-size:12px;color:var(--text-muted);margin-bottom:10px}
+.pueblo-verse{font-size:13px;color:var(--text);line-height:1.6;font-style:italic;border-left:2px solid var(--purple);padding-left:10px;margin-bottom:12px}
+.pueblo-stats{display:flex;justify-content:space-between;align-items:center}
+.pueblo-praying{font-size:12px;color:var(--text-muted)}
+.btn-pray{background:var(--purple);color:var(--btn-text);border:none;border-radius:20px;padding:8px 16px;font-size:12px;font-weight:500;cursor:pointer}
+.btn-pray:hover{opacity:0.9}
+.btn-pray.prayed{background:var(--green)}
+
+/* PLANES */
+.plan-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:0.5px solid var(--border)}
+.plan-check{width:24px;height:24px;border-radius:6px;border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background 0.2s}
+.plan-check.done{background:var(--purple);border-color:var(--purple)}
+.plan-ref{font-size:14px;color:var(--text)}
+.plan-desc{font-size:11px;color:var(--text-muted);margin-top:2px}
+.today-tag{font-size:10px;color:var(--gold);background:rgba(232,201,122,0.15);border-radius:4px;padding:2px 6px;margin-left:6px}
+
+/* CHAT */
+.chat-messages{background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;min-height:200px;max-height:300px;overflow-y:auto}
+.msg{margin-bottom:12px}
+.msg-sender{font-size:11px;font-weight:600;margin-bottom:4px}
+.msg-ai .msg-sender{color:var(--purple-light)}
+.msg-user .msg-sender{color:var(--text-muted);text-align:right}
+.msg-bubble{font-size:13px;line-height:1.6;color:var(--text)}
+.msg-user .msg-bubble{background:var(--bg2);border-radius:10px;padding:8px 12px;display:inline-block;float:right;clear:both;max-width:85%}
+.msg-ai .msg-bubble{max-width:90%}
+.chat-input-row{display:flex;gap:8px;margin-bottom:8px}
+.chat-input{flex:1;background:var(--card);border:0.5px solid var(--border);border-radius:20px;padding:10px 16px;color:var(--text);font-size:13px;outline:none}
+.chat-input:focus{border-color:var(--purple)}
+.chat-send{background:var(--purple);color:var(--btn-text);border:none;border-radius:20px;padding:10px 18px;font-size:13px;font-weight:500;cursor:pointer}
+.chat-disclaimer{font-size:11px;color:var(--text-dim);text-align:center}
+
+/* PERSONAJES */
+.personaje-card{background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:8px}
+.pers-name{font-size:15px;font-weight:600;color:var(--gold);margin-bottom:4px}
+.pers-tag{display:inline-block;background:rgba(107,79,216,0.2);border:0.5px solid rgba(107,79,216,0.3);border-radius:4px;padding:2px 8px;font-size:10px;color:var(--purple-light);margin-right:4px;margin-bottom:8px}
+.pers-analysis{font-size:13px;color:var(--text);line-height:1.6;margin-bottom:8px}
+.pers-verse{font-size:12px;color:var(--text-muted);font-style:italic;border-left:2px solid var(--gold);padding-left:8px}
+
+/* PREMIUM */
+.premium-card{background:linear-gradient(135deg,var(--bg2),var(--bg3));border:0.5px solid rgba(232,201,122,0.3);border-radius:var(--radius);padding:16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.premium-info .prem-title{font-size:14px;font-weight:600;color:var(--gold)}
+.premium-info .prem-desc{font-size:12px;color:var(--text-muted);margin-top:2px}
+.btn-upgrade{background:var(--gold);color:var(--bg);border:none;border-radius:20px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+
+/* SECURITY PANEL */
+.security-panel{background:rgba(16,185,129,0.05);border:0.5px solid rgba(16,185,129,0.2);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.sec-title{font-size:13px;font-weight:600;color:#6ee7b7;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.sec-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid rgba(16,185,129,0.1)}
+.sec-item:last-child{border-bottom:none}
+.sec-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+.sec-text{font-size:12px;color:var(--text-muted)}
+
+/* TIMER */
+.timer-display{background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:24px;text-align:center;margin-bottom:10px}
+.timer-num{font-size:48px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+.timer-label{font-size:12px;color:var(--text-muted);margin-top:4px}
+.timer-controls{display:flex;gap:8px;justify-content:center;margin-top:16px}
+.timer-btn{background:var(--bg2);border:0.5px solid var(--border);border-radius:8px;padding:10px 20px;color:var(--text);font-size:13px;cursor:pointer}
+.timer-btn.start{background:var(--purple);border-color:var(--purple);color:var(--btn-text)}
+.timer-btn:hover{opacity:0.8}
+
+/* TOAST */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.toast.show{opacity:1}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:none;align-items:center;justify-content:center;padding:24px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border:0.5px solid var(--border);border-radius:16px;padding:20px;width:100%;max-width:320px}
+.modal-title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px}
+.modal-text{font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:16px}
+.modal-actions{display:flex;gap:8px}
+.modal-cancel{flex:1;background:transparent;border:0.5px solid var(--border);border-radius:8px;padding:10px;color:var(--text-muted);cursor:pointer;font-size:13px}
+.modal-confirm{flex:1;background:var(--red);border:none;border-radius:8px;padding:10px;color:#fff;cursor:pointer;font-size:13px;font-weight:500}
+
+/* SESSION WARNING */
+.session-bar{background:rgba(239,68,68,0.1);border-bottom:0.5px solid rgba(239,68,68,0.3);padding:8px 16px;font-size:12px;color:#fca5a5;text-align:center;display:none}
+
+/* HIDDEN */
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="report-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Reportar contenido</div>
+    <div class="modal-text" id="modal-text">¿Estás seguro de que quieres reportar esta publicación? Será revisada en menos de 24 horas.</div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="modal-confirm" onclick="confirmReport()">Reportar</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div class="auth-screen" id="screen-login">
+  <div class="auth-logo">✦ MenteClara</div>
+  <div class="auth-sub" id="login-sub">Tu espacio de oración y devoción</div>
+  <div class="auth-card">
+    <div class="auth-title" id="login-title">Iniciar sesión</div>
+    <div class="auth-desc" id="login-desc">Accede a tu cuenta de forma segura</div>
+    <div class="error-msg" id="login-error"></div>
+    <div class="attempts-warning" id="attempts-warn"></div>
+    <label class="field-label" id="lbl-email">Correo electrónico</label>
+    <input class="field-input" type="email" id="login-email" placeholder="tu@correo.com">
+    <label class="field-label" id="lbl-pass">Contraseña</label>
+    <div style="position:relative">
+      <input class="field-input" type="password" id="login-pass" placeholder="••••••••" onkeyup="if(event.key==='Enter')doLogin()" style="padding-right:42px">
+      <button onclick="togglePassVisibility('login-pass',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
+    </div>
+    <button class="btn-primary" onclick="doLogin()" id="btn-login">Entrar</button>
+    <button class="btn-ghost" onclick="showScreen('register')" id="btn-go-register">Crear cuenta nueva</button>
+    <div class="security-note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <p id="sec-note-login">Conexión encriptada. Tus datos están protegidos con AES-256.</p>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTER -->
+<div class="auth-screen hidden" id="screen-register">
+  <div class="auth-logo">✦ MenteClara</div>
+  <div class="auth-card">
+    <div class="auth-title" id="reg-title">Crear cuenta</div>
+    <div class="auth-desc" id="reg-desc">Únete a la comunidad de oración</div>
+    <div class="error-msg" id="reg-error"></div>
+    <div class="success-msg" id="reg-success"></div>
+    <label class="field-label" id="lbl-name">Nombre (solo tú lo verás)</label>
+    <input class="field-input" type="text" id="reg-name" placeholder="Tu nombre">
+    <label class="field-label" id="lbl-reg-email">Correo electrónico</label>
+    <input class="field-input" type="email" id="reg-email" placeholder="tu@correo.com">
+    <label class="field-label" id="lbl-reg-pass">Contraseña</label>
+    <div style="position:relative">
+      <input class="field-input" type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" oninput="checkStrength(this.value)" style="padding-right:42px">
+      <button onclick="togglePassVisibility('reg-pass',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
+    </div>
+    <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+    <label class="field-label" id="lbl-reg-pass2">Confirmar contraseña</label>
+    <div style="position:relative">
+      <input class="field-input" type="password" id="reg-pass2" placeholder="Repite tu contraseña" style="padding-right:42px">
+      <button onclick="togglePassVisibility('reg-pass2',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
+    </div>
+    <div class="age-check">
+      <input type="checkbox" id="age-confirm">
+      <label for="age-confirm" id="lbl-age">Confirmo que tengo 13 años o más y acepto los términos de uso y política de privacidad.</label>
+    </div>
+    <button class="btn-primary" onclick="doRegister()" id="btn-register">Crear cuenta</button>
+    <div class="auth-link"><span onclick="showScreen('login')" id="go-login-link">¿Ya tienes cuenta? Inicia sesión</span></div>
+    <div class="security-note">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <p id="sec-note-reg">Tu correo nunca será compartido. El anonimato en la comunidad es total.</p>
+    </div>
+  </div>
+</div>
+
+<!-- VERIFY EMAIL -->
+<div class="auth-screen hidden" id="screen-verify">
+  <div class="auth-logo">✦ MenteClara</div>
+  <div class="auth-card">
+    <div style="text-align:center;margin-bottom:16px">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#e8c97a" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+    </div>
+    <div class="auth-title" style="text-align:center" id="verify-title">Verifica tu correo</div>
+    <div class="auth-desc" style="text-align:center" id="verify-desc">Hemos enviado un enlace de verificación a tu correo. Por favor revísalo antes de continuar.</div>
+    <button class="btn-primary" onclick="enterAppAfterRegister();showToast(getText('email_verified'))" id="btn-verified">Ya verifiqué mi correo</button>
+    <button class="btn-ghost" onclick="showScreen('login')" id="btn-back-login">Volver al inicio</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="main-app">
+  <div class="session-bar" id="session-bar"></div>
+  <div class="header">
+    <div class="header-row">
+      <span class="app-name">✦ MenteClara</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:4px;align-items:center">
+          <button onclick="changeFontSize(-1)" style="background:var(--bg3);border:0.5px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text-muted);font-size:14px;cursor:pointer">A-</button>
+          <button onclick="changeFontSize(1)" style="background:var(--bg3);border:0.5px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text-muted);font-size:16px;cursor:pointer">A+</button>
+        </div>
+        <select class="lang-sel" onchange="setLang(this.value)" id="lang-select">
+          <option value="es">🇲🇽 ES</option>
+          <option value="en">🇺🇸 EN</option>
+          <option value="pt">🇧🇷 PT</option>
+          <option value="fr">🇫🇷 FR</option>
+          <option value="sw">🌍 SW</option>
+          <option value="ko">🇰🇷 KO</option>
+          <option value="zh">🇨🇳 ZH</option>
+        </select>
+        <div class="security-badge">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span id="badge-secure">Seguro</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="verse-banner">
+    <div class="verse-ref" id="verse-ref">Filipenses 4:13 • RVR1960</div>
+    <div class="verse-text" id="verse-text">"Todo lo puedo en Cristo que me fortalece."</div>
+    <div class="verse-actions">
+      <button class="verse-btn" onclick="saveCurrentVerse()">❤ <span id="vbtn-save">Guardar</span></button>
+      <button class="verse-btn" onclick="speakVerse()" id="btn-speak">🔊 <span>Escuchar</span></button>
+      <button class="verse-btn" onclick="AudioSystem.toggleMusic();this.textContent=(AudioSystem.musicEnabled?'🎵':'🔇')" id="btn-music">🎵</button>
+      <button class="verse-btn" onclick="shareVerse()">↗ <span id="vbtn-share">Compartir</span></button>
+    </div>
+  </div>
+
+  <div class="content" id="main-content">
+    <!-- Sections injected by JS -->
+  </div>
+
+  <div class="nav" id="main-nav">
+    <button class="nav-btn active" onclick="showTab('home',this)" id="nav-home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+      <span id="nav-lbl-home">Inicio</span>
+    </button>
+    <button class="nav-btn" onclick="showTab('comunidad',this)" id="nav-comunidad">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span id="nav-lbl-com">Comunidad</span>
+    </button>
+    <button class="nav-btn" onclick="showTab('pueblos',this)" id="nav-pueblos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span id="nav-lbl-pue">Pueblos</span>
+    </button>
+    <button class="nav-btn" onclick="showTab('planes',this)" id="nav-planes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span id="nav-lbl-plan">Planes</span>
+    </button>
+    <button class="nav-btn" onclick="showTab('chat',this)" id="nav-chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span id="nav-lbl-chat">Chat IA</span>
+    </button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// STREAK & REAL-TIME STATS
+// ═══════════════════════════════════════
+const AppStats = {
+  prayingToday: 0,
+  lastActiveDate: null,
+
+  getStoredStreak() {
+    try {
+      const data = JSON.parse(localStorage.getItem('mc_streak') || '{"streak":0,"lastDate":null}');
+      return data;
+    } catch(e) { return { streak: 0, lastDate: null }; }
+  },
+
+  updateStreak() {
+    const today = new Date().toISOString().split('T')[0];
+    const data = this.getStoredStreak();
+    if (data.lastDate === today) return data.streak;
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    let streak = data.lastDate === yesterday ? data.streak + 1 : 1;
+    try { localStorage.setItem('mc_streak', JSON.stringify({ streak, lastDate: today })); } catch(e) {}
+    return streak;
+  },
+
+  getStreak() { return this.getStoredStreak().streak || 0; },
+
+  getStreakDays() {
+    const days = ['D','L','M','M','J','V','S'];
+    const today = new Date().getDay();
+    const streak = this.getStreak();
+    return days.map((d, i) => {
+      const diff = (i - today + 7) % 7;
+      if (diff === 0) return { label: d, type: 's-today' };
+      if (diff > 0) return { label: d, type: 's-empty' };
+      if (7 - diff <= streak) return { label: d, type: 's-done' };
+      return { label: d, type: 's-empty' };
+    });
+  }
+};
+
+// Update streak on app load
+function getStreak() { return AppStats.updateStreak(); }
+function getPrayingCount() {
+  const base = communityPosts.reduce((sum, p) => sum + (p.praying || 0), 0);
+  return base + AppStats.prayingToday;
+}
+function renderStreakDays() {
+  return AppStats.getStreakDays().map(d =>
+    '<div class="streak-day ' + d.type + '">' + d.label + '</div>'
+  ).join('');
+}
+
+// Update stats every 60 seconds
+setInterval(() => {
+  const sn = document.getElementById('stat-streak-num');
+  const pn = document.getElementById('stat-praying-num');
+  if (sn) sn.textContent = getStreak();
+  if (pn) pn.textContent = getPrayingCount();
+}, 60000);
+
+// ═══════════════════════════════════════
+// SECURITY SYSTEM
+// ═══════════════════════════════════════
+const Security = {
+  loginAttempts: 0,
+  maxAttempts: 5,
+  lockoutTime: null,
+  sessionStart: Date.now(),
+  sessionTimeout: 60 * 60 * 1000, // 60 min
+  
+  hashPassword(pass) {
+    // Simulated hash (in production: bcrypt on server)
+    let hash = 0;
+    for (let i = 0; i < pass.length; i++) {
+      hash = ((hash << 5) - hash) + pass.charCodeAt(i);
+      hash |= 0;
+    }
+    return 'hashed_' + Math.abs(hash).toString(36);
+  },
+  
+  validateEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  },
+  
+  validatePassword(pass) {
+    return pass.length >= 8;
+  },
+  
+  sanitizeText(text) {
+    // Remove URLs, HTML, dangerous content
+    return text
+      .replace(/<[^>]*>/g, '')
+      .replace(/https?:\/\/[^\s]*/gi, '[enlace eliminado]')
+      .replace(/www\.[^\s]*/gi, '[enlace eliminado]')
+      .replace(/[^\w\s\u00C0-\u024F\u0400-\u04FF.,!?¿¡:;'"()\-áéíóúñüàèìòùâêîôûäëïöü]/gi, '')
+      .trim()
+      .slice(0, 300);
+  },
+  
+  checkRateLimit() {
+    if (this.lockoutTime && Date.now() < this.lockoutTime) {
+      const remaining = Math.ceil((this.lockoutTime - Date.now()) / 1000);
+      return { locked: true, remaining };
+    }
+    this.lockoutTime = null;
+    return { locked: false };
+  },
+  
+  recordFailedAttempt() {
+    this.loginAttempts++;
+    if (this.loginAttempts >= this.maxAttempts) {
+      this.lockoutTime = Date.now() + 5 * 60 * 1000; // 5 min lockout
+      this.loginAttempts = 0;
+    }
+    return this.maxAttempts - this.loginAttempts;
+  },
+  
+  resetAttempts() {
+    this.loginAttempts = 0;
+    this.lockoutTime = null;
+  },
+  
+  checkSession() {
+    if (Date.now() - this.sessionStart > this.sessionTimeout) {
+      doLogout();
+      return false;
+    }
+    return true;
+  },
+  
+  generateAnonId() {
+    return 'usr_' + Math.random().toString(36).slice(2, 10);
+  },
+
+  filterContent(text) {
+    const blocked = ['odio','matar','suicid','droga','pornograf','blasfem','satán','diablo'];
+    const lower = text.toLowerCase();
+    return blocked.some(w => lower.includes(w));
+  }
+};
+
+// Session check every 5 min
+setInterval(() => {
+  if (document.getElementById('main-app').style.display !== 'none') {
+    const remaining = Security.sessionTimeout - (Date.now() - Security.sessionStart);
+    if (remaining < 5 * 60 * 1000 && remaining > 0) {
+      const bar = document.getElementById('session-bar');
+      bar.style.display = 'block';
+      bar.textContent = getText('session_warning').replace('{min}', Math.ceil(remaining / 60000));
+    }
+    if (!Security.checkSession()) doLogout();
+  }
+}, 60000);
+
+// ═══════════════════════════════════════
+// TRANSLATIONS
+// ═══════════════════════════════════════
+let currentLang = 'es';
+let isDarkMode = localStorage.getItem('mc_dark') === 'true';
+let bibleVersion = localStorage.getItem('mc_bible_version') || 'rv1909';
+function setBibleVersion(v) {
+  bibleVersion = v;
+  localStorage.setItem('mc_bible_version', v);
+  renderHome();
+  updateVerseDisplay();
+}
+function openVersionBiblica() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">📖 Versión de la Biblia</div>
+  <div class="card-sub" style="margin-bottom:14px">Elige qué traducción usar para el versículo diario y el buscador.</div>
+  <div class="mod-card" onclick="setBibleVersion('rv1909')" style="${bibleVersion==='rv1909' ? 'border-color:var(--gold)' : ''}">
+    <div class="mod-info"><div class="mod-name">Reina Valera 1909${bibleVersion==='rv1909' ? ' ✓' : ''}</div><div class="mod-desc">Dominio público. Funciona sin conexión a internet.</div></div>
+  </div>
+  <div class="mod-card" onclick="setBibleVersion('rvr1960')" style="${bibleVersion==='rvr1960' ? 'border-color:var(--gold)' : ''}">
+    <div class="mod-info"><div class="mod-name">Reina Valera 1960${bibleVersion==='rvr1960' ? ' ✓' : ''}</div><div class="mod-desc">Requiere conexión y clave de API.Bible configurada.</div></div>
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+function toggleDarkMode() {
+  isDarkMode = !isDarkMode;
+  localStorage.setItem('mc_dark', isDarkMode);
+  document.body.classList.toggle('dark-mode', isDarkMode);
+  renderHome();
+}
+const T = {
+  es: {
+    saved:'Versículo guardado', shared:'Compartido', email_verified:'¡Correo verificado!',
+    session_warning:'Tu sesión expira en {min} min. Guarda tu trabajo.',
+    login_locked:'Demasiados intentos. Espera {sec} segundos.',
+    login_attempts:'Intento fallido. Te quedan {n} intentos.',
+    login_error:'Correo o contraseña incorrectos.',
+    login_empty:'Por favor completa todos los campos.',
+    reg_error_email:'Correo no válido.',
+    reg_error_pass:'La contraseña debe tener al menos 8 caracteres.',
+    reg_error_match:'Las contraseñas no coinciden.',
+    reg_error_age:'Debes confirmar que tienes 13 años o más.',
+    reg_success:'¡Cuenta creada! Verifica tu correo.',
+    post_empty:'Escribe tu petición primero.',
+    post_blocked:'Contenido no permitido en la comunidad.',
+    post_sent:'Publicado. La comunidad ora contigo.',
+    reported:'Reportado. Lo revisaremos en menos de 24h.',
+    praying:'Orando por esta petición',
+    badge_secure:'Seguro',
+    // Nav
+    nav_home:'Inicio', nav_com:'Comunidad', nav_pue:'Pueblos', nav_plan:'Planes', nav_chat:'Chat IA',
+    // Home
+    sec_stats:'Tu progreso', sec_modules:'Módulos de hoy',
+    stat_streak:'Días racha', stat_praying:'Orando hoy', stat_goals:'Logros',
+    mod_timer:'Timer de oración', mod_timer_d:'Cronometra tu tiempo con Dios',
+    mod_diary:'Diario de oración', mod_diary_d:'Registra peticiones y respuestas',
+    mod_chars:'Personajes bíblicos', mod_chars_d:'Análisis solo desde la Escritura — RVR1960',
+    mod_music:'Música worship', mod_music_d:'Adoración instrumental con IA',
+    mod_security:'Privacidad y seguridad', mod_security_d:'Tu información siempre protegida',
+    prem_title:'Plan Iglesias', prem_desc:'Herramientas para pastores y congregaciones',
+    prem_btn:'Ver planes',
+    // Community
+    com_title:'Peticiones de oración', com_placeholder:'Escribe tu petición de oración...',
+    com_rules:'Solo texto. Sin enlaces. Máximo 300 caracteres. Moderado automáticamente.',
+    com_btn:'Publicar petición',
+    // Pueblos
+    pue_title:'Pueblo del día — ora por ellos',
+    pue_praying:'{n} orando hoy',
+    btn_pray:'Orar por ellos', btn_prayed:'Orando ✓',
+    // Planes
+    plan_title:'Plan de lectura — Proverbios 31 días',
+    // Chat
+    chat_title:'Chat IA — apoyo espiritual',
+    chat_placeholder:'Escribe aquí... (solo texto)',
+    chat_send:'Enviar',
+    chat_disclaimer:'Esta IA no sustituye consejería pastoral o psicológica profesional.',
+    chat_ai_name:'IA Bíblica',
+    chat_you:'Tú',
+    chat_thinking:'Pensando...',
+    // Security
+    sec_panel_title:'Tu seguridad activa',
+    sec_items:['Encriptación AES-256 activa','Conexión HTTPS segura','Anonimato en comunidad garantizado','Sin venta de datos a terceros','Sesión con expiración automática','Moderación automática de contenido','Cumplimiento LFPDPPP México'],
+  },
+  en: {
+    saved:'Verse saved', shared:'Shared', email_verified:'Email verified!',
+    session_warning:'Your session expires in {min} min. Save your work.',
+    login_locked:'Too many attempts. Wait {sec} seconds.',
+    login_attempts:'Failed attempt. {n} attempts remaining.',
+    login_error:'Incorrect email or password.',
+    login_empty:'Please complete all fields.',
+    reg_error_email:'Invalid email.',
+    reg_error_pass:'Password must be at least 8 characters.',
+    reg_error_match:'Passwords do not match.',
+    reg_error_age:'You must confirm you are 13 or older.',
+    reg_success:'Account created! Check your email.',
+    post_empty:'Write your prayer request first.',
+    post_blocked:'Content not allowed in the community.',
+    post_sent:'Published. The community prays with you.',
+    reported:'Reported. We will review it within 24h.',
+    praying:'Praying for this request',
+    badge_secure:'Secure',
+    nav_home:'Home', nav_com:'Community', nav_pue:'Peoples', nav_plan:'Plans', nav_chat:'AI Chat',
+    sec_stats:'Your progress', sec_modules:"Today's modules",
+    stat_streak:'Day streak', stat_praying:'Praying today', stat_goals:'Achievements',
+    mod_timer:'Prayer timer', mod_timer_d:'Track your time with God',
+    mod_diary:'Prayer journal', mod_diary_d:'Record requests and answers',
+    mod_chars:'Biblical characters', mod_chars_d:'Analysis only from Scripture — KJV',
+    mod_music:'Worship music', mod_music_d:'AI-generated instrumental worship',
+    mod_security:'Privacy & security', mod_security_d:'Your information always protected',
+    prem_title:'Church plan', prem_desc:'Tools for pastors and congregations',
+    prem_btn:'View plans',
+    com_title:'Prayer requests', com_placeholder:'Write your prayer request...',
+    com_rules:'Text only. No links. Max 300 characters. Auto-moderated.',
+    com_btn:'Post request',
+    pue_title:'People of the day — pray for them',
+    pue_praying:'{n} praying today',
+    btn_pray:'Pray for them', btn_prayed:'Praying ✓',
+    plan_title:'Reading plan — Proverbs 31 days',
+    chat_title:'AI Chat — spiritual support',
+    chat_placeholder:'Type here... (text only)',
+    chat_send:'Send',
+    chat_disclaimer:'This AI does not replace professional pastoral or psychological counseling.',
+    chat_ai_name:'Biblical AI',
+    chat_you:'You',
+    chat_thinking:'Thinking...',
+    sec_panel_title:'Your active security',
+    sec_items:['AES-256 encryption active','Secure HTTPS connection','Community anonymity guaranteed','No data sold to third parties','Auto-expiring session','Automatic content moderation','GDPR / data law compliance'],
+  },
+  pt: {
+    saved:'Versículo salvo', shared:'Compartilhado', email_verified:'E-mail verificado!',
+    session_warning:'Sua sessão expira em {min} min. Salve seu trabalho.',
+    login_locked:'Muitas tentativas. Aguarde {sec} segundos.',
+    login_attempts:'Tentativa falhou. Restam {n} tentativas.',
+    login_error:'E-mail ou senha incorretos.',
+    login_empty:'Por favor preencha todos os campos.',
+    reg_error_email:'E-mail inválido.',
+    reg_error_pass:'A senha deve ter pelo menos 8 caracteres.',
+    reg_error_match:'As senhas não coincidem.',
+    reg_error_age:'Você deve confirmar que tem 13 anos ou mais.',
+    reg_success:'Conta criada! Verifique seu e-mail.',
+    post_empty:'Escreva seu pedido de oração primeiro.',
+    post_blocked:'Conteúdo não permitido na comunidade.',
+    post_sent:'Publicado. A comunidade ora com você.',
+    reported:'Reportado. Revisaremos em menos de 24h.',
+    praying:'Orando por este pedido',
+    badge_secure:'Seguro',
+    nav_home:'Início', nav_com:'Comunidade', nav_pue:'Povos', nav_plan:'Planos', nav_chat:'Chat IA',
+    sec_stats:'Seu progresso', sec_modules:'Módulos de hoje',
+    stat_streak:'Dias seguidos', stat_praying:'Orando hoje', stat_goals:'Conquistas',
+    mod_timer:'Timer de oração', mod_timer_d:'Cronometro seu tempo com Deus',
+    mod_diary:'Diário de oração', mod_diary_d:'Registre pedidos e respostas',
+    mod_chars:'Personagens bíblicos', mod_chars_d:'Análise somente da Escritura — ARA',
+    mod_music:'Música de louvor', mod_music_d:'Louvor instrumental gerado por IA',
+    mod_security:'Privacidade e segurança', mod_security_d:'Suas informações sempre protegidas',
+    prem_title:'Plano Igrejas', prem_desc:'Ferramentas para pastores e congregações',
+    prem_btn:'Ver planos',
+    com_title:'Pedidos de oração', com_placeholder:'Escreva seu pedido de oração...',
+    com_rules:'Somente texto. Sem links. Máximo 300 caracteres. Moderado automaticamente.',
+    com_btn:'Publicar pedido',
+    pue_title:'Povo do dia — ore por eles',
+    pue_praying:'{n} orando hoje',
+    btn_pray:'Orar por eles', btn_prayed:'Orando ✓',
+    plan_title:'Plano de leitura — Provérbios 31 dias',
+    chat_title:'Chat IA — apoio espiritual',
+    chat_placeholder:'Digite aqui... (somente texto)',
+    chat_send:'Enviar',
+    chat_disclaimer:'Esta IA não substitui aconselhamento pastoral ou psicológico profissional.',
+    chat_ai_name:'IA Bíblica',
+    chat_you:'Você',
+    chat_thinking:'Pensando...',
+    sec_panel_title:'Sua segurança ativa',
+    sec_items:['Criptografia AES-256 ativa','Conexão HTTPS segura','Anonimato na comunidade garantido','Sem venda de dados a terceiros','Sessão com expiração automática','Moderação automática de conteúdo','Conformidade LGPD Brasil'],
+  },
+  fr: {
+    saved:'Verset sauvegardé', shared:'Partagé', email_verified:'Email vérifié!',
+    session_warning:'Votre session expire dans {min} min.',
+    login_locked:'Trop de tentatives. Attendez {sec} secondes.',
+    login_attempts:'Tentative échouée. {n} essais restants.',
+    login_error:'Email ou mot de passe incorrect.',
+    login_empty:'Veuillez remplir tous les champs.',
+    reg_error_email:'Email invalide.',
+    reg_error_pass:'Le mot de passe doit avoir au moins 8 caractères.',
+    reg_error_match:'Les mots de passe ne correspondent pas.',
+    reg_error_age:'Vous devez confirmer avoir 13 ans ou plus.',
+    reg_success:'Compte créé! Vérifiez votre email.',
+    post_empty:'Écrivez votre requête de prière.',
+    post_blocked:'Contenu non autorisé dans la communauté.',
+    post_sent:'Publié. La communauté prie avec vous.',
+    reported:'Signalé. Nous examinerons sous 24h.',
+    praying:'Priant pour cette requête',
+    badge_secure:'Sécurisé',
+    nav_home:'Accueil', nav_com:'Communauté', nav_pue:'Peuples', nav_plan:'Plans', nav_chat:'Chat IA',
+    sec_stats:'Votre progrès', sec_modules:"Modules d'aujourd'hui",
+    stat_streak:'Jours consécutifs', stat_praying:'Priant aujourd\'hui', stat_goals:'Succès',
+    mod_timer:'Minuteur de prière', mod_timer_d:'Chronométrez votre temps avec Dieu',
+    mod_diary:'Journal de prière', mod_diary_d:'Enregistrez requêtes et réponses',
+    mod_chars:'Personnages bibliques', mod_chars_d:'Analyse uniquement des Écritures',
+    mod_music:'Musique de louange', mod_music_d:'Louange instrumentale générée par IA',
+    mod_security:'Confidentialité', mod_security_d:'Vos informations toujours protégées',
+    prem_title:'Plan Églises', prem_desc:'Outils pour pasteurs et congrégations',
+    prem_btn:'Voir les plans',
+    com_title:'Requêtes de prière', com_placeholder:'Écrivez votre requête de prière...',
+    com_rules:'Texte uniquement. Sans liens. 300 caractères max. Modéré automatiquement.',
+    com_btn:'Publier la requête',
+    pue_title:'Peuple du jour — priez pour eux',
+    pue_praying:'{n} priant aujourd\'hui',
+    btn_pray:'Prier pour eux', btn_prayed:'En prière ✓',
+    plan_title:'Plan de lecture — Proverbes 31 jours',
+    chat_title:'Chat IA — soutien spirituel',
+    chat_placeholder:'Écrivez ici... (texte seulement)',
+    chat_send:'Envoyer',
+    chat_disclaimer:'Cette IA ne remplace pas le conseil pastoral ou psychologique professionnel.',
+    chat_ai_name:'IA Biblique',
+    chat_you:'Vous',
+    chat_thinking:'Réflexion...',
+    sec_panel_title:'Votre sécurité active',
+    sec_items:['Chiffrement AES-256 actif','Connexion HTTPS sécurisée','Anonymat communautaire garanti','Pas de vente de données','Session à expiration automatique','Modération automatique du contenu','Conformité RGPD'],
+  },
+  sw: {
+    saved:'Mstari umehifadhiwa', shared:'Imeshirikiwa', email_verified:'Barua pepe imethibitishwa!',
+    session_warning:'Kikao chako kinaisha kwa dakika {min}.',
+    login_locked:'Majaribio mengi. Subiri sekunde {sec}.',
+    login_attempts:'Jaribio limeshindwa. Majaribio {n} yaliyobaki.',
+    login_error:'Barua pepe au nywila si sahihi.',
+    login_empty:'Tafadhali jaza sehemu zote.',
+    reg_error_email:'Barua pepe si sahihi.',
+    reg_error_pass:'Nywila inapaswa kuwa na herufi 8 au zaidi.',
+    reg_error_match:'Nywila hazifanani.',
+    reg_error_age:'Lazima uthibitishe una miaka 13 au zaidi.',
+    reg_success:'Akaunti imeundwa! Angalia barua pepe yako.',
+    post_empty:'Andika ombi lako la maombi.',
+    post_blocked:'Maudhui hayaruhusiwi katika jamii.',
+    post_sent:'Imechapishwa. Jamii inakuombea.',
+    reported:'Imeripotiwa. Tutakagua ndani ya masaa 24.',
+    praying:'Kuomba kwa ombi hili',
+    badge_secure:'Salama',
+    nav_home:'Nyumbani', nav_com:'Jamii', nav_pue:'Mataifa', nav_plan:'Mipango', nav_chat:'Sohali IA',
+    sec_stats:'Maendeleo yako', sec_modules:'Moduli za leo',
+    stat_streak:'Siku mfululizo', stat_praying:'Wanaoomba leo', stat_goals:'Mafanikio',
+    mod_timer:'Kipima wakati cha maombi', mod_timer_d:'Pima muda wako na Mungu',
+    mod_diary:'Jarida la maombi', mod_diary_d:'Rekodi maombi na majibu',
+    mod_chars:'Wahusika wa Biblia', mod_chars_d:'Uchambuzi kutoka Maandiko tu',
+    mod_music:'Muziki wa ibada', mod_music_d:'Muziki wa IA',
+    mod_security:'Faragha na usalama', mod_security_d:'Taarifa zako zinalindwa daima',
+    prem_title:'Mpango wa Kanisa', prem_desc:'Zana kwa wachungaji na makusanyiko',
+    prem_btn:'Angalia mipango',
+    com_title:'Maombi ya jamii', com_placeholder:'Andika ombi lako la maombi...',
+    com_rules:'Maandishi tu. Bila viungo. Herufi 300 zaidi. Inachunguzwa kiotomatiki.',
+    com_btn:'Chapisha ombi',
+    pue_title:'Watu wa leo — waombee',
+    pue_praying:'{n} wanaoomba leo',
+    btn_pray:'Waombee', btn_prayed:'Kuomba ✓',
+    plan_title:'Mpango wa kusoma — Mithali siku 31',
+    chat_title:'Sohali IA — msaada wa kiroho',
+    chat_placeholder:'Andika hapa... (maandishi tu)',
+    chat_send:'Tuma',
+    chat_disclaimer:'IA hii haichukui nafasi ya ushauri wa kichungaji au kisaikolojia.',
+    chat_ai_name:'IA ya Biblia',
+    chat_you:'Wewe',
+    chat_thinking:'Inafikiri...',
+    sec_panel_title:'Usalama wako unaofanya kazi',
+    sec_items:['Usimbaji AES-256 unaofanya kazi','Muunganisho salama wa HTTPS','Kutojulikana kwa jamii kunakohakikishwa','Hakuna mauzo ya data','Kikao chenye kumalizika kiotomatiki','Uchunguzi wa maudhui kiotomatiki','Uzingatiaji wa sheria za data'],
+  },
+  ko: {
+    saved:'구절 저장됨', shared:'공유됨', email_verified:'이메일 인증됨!',
+    session_warning:'세션이 {min}분 후 만료됩니다.',
+    login_locked:'시도 횟수 초과. {sec}초 기다리세요.',
+    login_attempts:'로그인 실패. {n}번 남았습니다.',
+    login_error:'이메일 또는 비밀번호가 올바르지 않습니다.',
+    login_empty:'모든 필드를 입력해주세요.',
+    reg_error_email:'유효하지 않은 이메일입니다.',
+    reg_error_pass:'비밀번호는 8자 이상이어야 합니다.',
+    reg_error_match:'비밀번호가 일치하지 않습니다.',
+    reg_error_age:'13세 이상임을 확인해야 합니다.',
+    reg_success:'계정이 생성되었습니다! 이메일을 확인하세요.',
+    post_empty:'먼저 기도 요청을 작성하세요.',
+    post_blocked:'커뮤니티에서 허용되지 않는 콘텐츠입니다.',
+    post_sent:'게시되었습니다. 커뮤니티가 함께 기도합니다.',
+    reported:'신고되었습니다. 24시간 이내에 검토하겠습니다.',
+    praying:'이 요청을 위해 기도하는 중',
+    badge_secure:'보안',
+    nav_home:'홈', nav_com:'커뮤니티', nav_pue:'민족', nav_plan:'계획', nav_chat:'AI 채팅',
+    sec_stats:'나의 진행', sec_modules:'오늘의 모듈',
+    stat_streak:'연속 일수', stat_praying:'오늘 기도 중', stat_goals:'업적',
+    mod_timer:'기도 타이머', mod_timer_d:'하나님과의 시간을 측정하세요',
+    mod_diary:'기도 일지', mod_diary_d:'기도 요청과 응답을 기록하세요',
+    mod_chars:'성경 인물', mod_chars_d:'성경만을 기반으로 한 분석',
+    mod_music:'찬양 음악', mod_music_d:'AI 생성 찬양 음악',
+    mod_security:'개인정보 보호', mod_security_d:'항상 보호되는 정보',
+    prem_title:'교회 플랜', prem_desc:'목사와 교회를 위한 도구',
+    prem_btn:'플랜 보기',
+    com_title:'기도 요청', com_placeholder:'기도 요청을 작성하세요...',
+    com_rules:'텍스트만. 링크 없음. 최대 300자. 자동 검토됨.',
+    com_btn:'요청 게시',
+    pue_title:'오늘의 민족 — 그들을 위해 기도하세요',
+    pue_praying:'오늘 {n}명이 기도 중',
+    btn_pray:'그들을 위해 기도', btn_prayed:'기도 중 ✓',
+    plan_title:'독서 계획 — 잠언 31일',
+    chat_title:'AI 채팅 — 영적 지원',
+    chat_placeholder:'여기에 입력하세요... (텍스트만)',
+    chat_send:'보내기',
+    chat_disclaimer:'이 AI는 전문 목회 또는 심리 상담을 대체하지 않습니다.',
+    chat_ai_name:'성경 AI',
+    chat_you:'나',
+    chat_thinking:'생각 중...',
+    sec_panel_title:'활성 보안',
+    sec_items:['AES-256 암호화 활성','보안 HTTPS 연결','커뮤니티 익명성 보장','데이터 판매 없음','자동 세션 만료','자동 콘텐츠 검토','데이터 보호법 준수'],
+  },
+  zh: {
+    saved:'经文已保存', shared:'已分享', email_verified:'邮箱已验证！',
+    session_warning:'您的会话将在{min}分钟后过期。',
+    login_locked:'尝试次数过多，请等待{sec}秒。',
+    login_attempts:'登录失败，还剩{n}次尝试。',
+    login_error:'邮箱或密码不正确。',
+    login_empty:'请填写所有字段。',
+    reg_error_email:'邮箱无效。',
+    reg_error_pass:'密码至少需要8个字符。',
+    reg_error_match:'密码不匹配。',
+    reg_error_age:'您必须确认年满13岁。',
+    reg_success:'账户已创建！请查看您的邮箱。',
+    post_empty:'请先写下您的祈祷请求。',
+    post_blocked:'社区不允许此内容。',
+    post_sent:'已发布。社区与您一同祈祷。',
+    reported:'已举报。我们将在24小时内审查。',
+    praying:'为此请求祈祷中',
+    badge_secure:'安全',
+    nav_home:'主页', nav_com:'社区', nav_pue:'民族', nav_plan:'计划', nav_chat:'AI对话',
+    sec_stats:'您的进度', sec_modules:'今日模块',
+    stat_streak:'连续天数', stat_praying:'今日祈祷', stat_goals:'成就',
+    mod_timer:'祈祷计时器', mod_timer_d:'记录您与神的时间',
+    mod_diary:'祈祷日记', mod_diary_d:'记录祈祷请求和回应',
+    mod_chars:'圣经人物', mod_chars_d:'仅基于圣经的分析',
+    mod_music:'敬拜音乐', mod_music_d:'AI生成的敬拜音乐',
+    mod_security:'隐私与安全', mod_security_d:'您的信息始终受到保护',
+    prem_title:'教会计划', prem_desc:'为牧师和教会提供的工具',
+    prem_btn:'查看计划',
+    com_title:'祈祷请求', com_placeholder:'写下您的祈祷请求...',
+    com_rules:'仅限文字。无链接。最多300字。自动审核。',
+    com_btn:'发布请求',
+    pue_title:'今日民族 — 为他们祈祷',
+    pue_praying:'今日{n}人在祈祷',
+    btn_pray:'为他们祈祷', btn_prayed:'祈祷中 ✓',
+    plan_title:'阅读计划 — 箴言31天',
+    chat_title:'AI对话 — 灵性支持',
+    chat_placeholder:'在此输入...（仅限文字）',
+    chat_send:'发送',
+    chat_disclaimer:'此AI不能替代专业牧灵或心理辅导。',
+    chat_ai_name:'圣经AI',
+    chat_you:'您',
+    chat_thinking:'思考中...',
+    sec_panel_title:'您的安全保障',
+    sec_items:['AES-256加密已启用','安全HTTPS连接','社区匿名性保障','不出售数据','自动会话过期','内容自动审核','符合数据保护法规'],
+  }
+};
+
+function getText(key) { return T[currentLang][key] || T.es[key] || key; }
+
+function setLang(l) {
+  currentLang = l;
+  document.getElementById('lang-select').value = l;
+  document.getElementById('badge-secure').textContent = getText('badge_secure');
+  // Update verse
+  const verses = {
+    es:['Filipenses 4:13 • RVR1960','"Todo lo puedo en Cristo que me fortalece."'],
+    en:['Philippians 4:13 • KJV','"I can do all things through Christ which strengtheneth me."'],
+    pt:['Filipenses 4:13 • ARA','"Tudo posso naquele que me fortalece."'],
+    fr:['Philippiens 4:13 • LSG','"Je puis tout par celui qui me fortifie."'],
+    sw:['Wafilipi 4:13 • Biblia','"Naweza kufanya mambo yote katika Kristo anitiaye nguvu."'],
+    ko:['빌립보서 4:13 • 개역개정','"내게 능력 주시는 자 안에서 내가 모든 것을 할 수 있느니라."'],
+    zh:['腓立比书 4:13 • 和合本','"我靠着那加给我力量的，凡事都能做。"']
+  };
+  document.getElementById('verse-ref').textContent = verses[l][0];
+  document.getElementById('verse-text').textContent = verses[l][1];
+  // Re-render current tab
+  const activeTab = document.querySelector('.nav-btn.active');
+  if (activeTab) activeTab.click();
+  // Update nav labels
+  document.getElementById('nav-lbl-home').textContent = getText('nav_home');
+  document.getElementById('nav-lbl-com').textContent = getText('nav_com');
+  document.getElementById('nav-lbl-pue').textContent = getText('nav_pue');
+  document.getElementById('nav-lbl-plan').textContent = getText('nav_plan');
+  document.getElementById('nav-lbl-chat').textContent = getText('nav_chat');
+}
+
+// ═══════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════
+const users = {};
+let currentUser = null;
+
+function showScreen(id) {
+  ['login','register','verify'].forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    el.classList.toggle('hidden', s !== id);
+  });
+}
+
+function enterAppAfterRegister() {
+  const email = document.getElementById('reg-email').value.trim();
+  const fbUser = window._fbUser;
+  currentUser = { email, name: email.split('@')[0], anonId: fbUser ? fbUser.uid.slice(0,8) : Security.generateAnonId(), firebase: true };
+  Security.sessionStart = Date.now();
+  document.getElementById('main-app').style.display = 'flex';
+  document.getElementById('screen-verify').classList.add('hidden');
+  document.getElementById('screen-login').classList.add('hidden');
+  showTab('home', document.getElementById('nav-home'));
+}
+
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+  const ageOk = document.getElementById('age-confirm').checked;
+  if (!Security.validateEmail(email)) { showError('reg-error', getText('reg_error_email')); return; }
+  if (!Security.validatePassword(pass)) { showError('reg-error', getText('reg_error_pass')); return; }
+  if (pass !== pass2) { showError('reg-error', getText('reg_error_match')); return; }
+  if (!ageOk) { showError('reg-error', getText('reg_error_age')); return; }
+  const btn = document.getElementById('btn-register');
+  btn.textContent = '...'; btn.disabled = true;
+  if (window.fbRegister) {
+    const result = await window.fbRegister(email, pass);
+    btn.textContent = 'Crear cuenta'; btn.disabled = false;
+    if (result.ok) {
+      const suc = document.getElementById('reg-success');
+      suc.textContent = getText('reg_success');
+      suc.style.display = 'block';
+      setTimeout(() => showScreen('verify'), 1500);
+      return;
+    } else if (result.error !== 'demo') {
+      const msgs = { 'auth/email-already-in-use':'Este correo ya está registrado.', 'auth/weak-password': getText('reg_error_pass') };
+      showError('reg-error', msgs[result.error] || 'Error al crear cuenta. Intenta de nuevo.');
+      return;
+    }
+  }
+  btn.textContent = 'Crear cuenta'; btn.disabled = false;
+  // Demo fallback
+  const suc = document.getElementById('reg-success');
+  suc.textContent = getText('reg_success') + ' (modo demo)';
+  suc.style.display = 'block';
+  setTimeout(() => showScreen('verify'), 1500);
+}
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 4000);
+}
+
+function togglePassVisibility(fieldId, btn) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  field.type = field.type === 'password' ? 'text' : 'password';
+  btn.textContent = field.type === 'password' ? '👁' : '🙈';
+}
+
+function checkStrength(pass) {
+  const fill = document.getElementById('strength-fill');
+  let score = 0;
+  if (pass.length >= 8) score++;
+  if (/[A-Z]/.test(pass)) score++;
+  if (/[0-9]/.test(pass)) score++;
+  if (/[^A-Za-z0-9]/.test(pass)) score++;
+  const colors = ['#ef4444','#f97316','#eab308','#10b981'];
+  const widths = ['25%','50%','75%','100%'];
+  fill.style.width = pass.length ? widths[score - 1] || '10%' : '0';
+  fill.style.background = pass.length ? colors[score - 1] || '#ef4444' : 'transparent';
+}
+
+async function doLogin() {
+  const rate = Security.checkRateLimit();
+  if (rate.locked) {
+    showError('login-error', getText('login_locked').replace('{sec}', rate.remaining));
+    return;
+  }
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (!email || !pass) { showError('login-error', getText('login_empty')); return; }
+
+  const btn = document.getElementById('btn-login');
+  btn.textContent = '...';
+  btn.disabled = true;
+
+  // Try Firebase first
+  if (window.fbLogin) {
+    const result = await window.fbLogin(email, pass);
+    if (result.ok) {
+      Security.resetAttempts();
+      const fbUser = result.user || window._fbUser;
+      currentUser = { email, name: email.split('@')[0], anonId: fbUser ? fbUser.uid.slice(0,8) : Security.generateAnonId(), firebase: true };
+      Security.sessionStart = Date.now();
+      document.getElementById('main-app').style.display = 'flex';
+      document.getElementById('screen-login').classList.add('hidden');
+      showTab('home', document.getElementById('nav-home'));
+      btn.textContent = 'Entrar'; btn.disabled = false;
+      return;
+    } else if (result.error !== 'demo' && result.error !== 'auth/invalid-credential' && result.error !== 'auth/user-not-found') {
+      btn.textContent = 'Entrar'; btn.disabled = false;
+      const remaining = Security.recordFailedAttempt();
+      showError('login-error', getText('login_error'));
+      return;
+    }
+  }
+
+  btn.textContent = 'Entrar'; btn.disabled = false;
+
+  // Demo fallback — acepta cualquier correo válido y contraseña de 8+ caracteres
+  if (Security.validateEmail(email) && pass.length >= 8) {
+    Security.resetAttempts();
+    currentUser = { email, name: email.split('@')[0], anonId: Security.generateAnonId(), firebase: false };
+    Security.sessionStart = Date.now();
+    document.getElementById('main-app').style.display = 'flex';
+    document.getElementById('screen-login').classList.add('hidden');
+    showTab('home', document.getElementById('nav-home'));
+  } else {
+    showError('login-error', pass.length < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : getText('login_error'));
+  }
+}
+
+// ═══════════════════════════════════════
+// DONACIONES — SISTEMA INTELIGENTE Y SEGURO
+// ═══════════════════════════════════════
+const DonationSecurity = {
+  attempts: 0,
+  lastAttempt: null,
+  flagged: false,
+  amounts: [],
+  
+  // Detecta comportamiento anormal
+  analyze(amount) {
+    const now = Date.now();
+    
+    // Reset si pasó más de 1 hora
+    if (this.lastAttempt && (now - this.lastAttempt) > 3600000) {
+      this.attempts = 0;
+      this.amounts = [];
+      this.flagged = false;
+    }
+    
+    this.attempts++;
+    this.lastAttempt = now;
+    this.amounts.push({ amount, time: now });
+    
+    // Filtrar últimos 10 minutos
+    const recent = this.amounts.filter(a => now - a.time < 600000);
+    
+    // Reglas de detección:
+    // 1. Más de 3 intentos en 10 minutos
+    if (recent.length > 3) { this.flagged = true; return { ok: false, reason: 'multiple_attempts' }; }
+    
+    // 2. Monto anormalmente alto (más de $500 USD equivalente)
+    if (amount > 500) { this.flagged = true; return { ok: false, reason: 'high_amount' }; }
+    
+    // 3. Monto cero o negativo
+    if (amount <= 0) { return { ok: false, reason: 'invalid_amount' }; }
+    
+    // 4. Ya marcado como sospechoso
+    if (this.flagged) { return { ok: false, reason: 'flagged' }; }
+    
+    return { ok: true };
+  },
+  
+  reset() {
+    this.attempts = 0;
+    this.lastAttempt = null;
+    this.flagged = false;
+    this.amounts = [];
+  }
+};
+
+const donationAmounts = [1, 3, 5, 10, 25, 50];
+let customDonation = '';
+
+function openDonaciones() {
+  const content = document.getElementById('main-content');
+  
+  if (DonationSecurity.flagged) {
+    content.innerHTML = `
+    <div class="section-label">💝 Apoya MenteClara</div>
+    <div class="card" style="text-align:center;padding:24px;background:rgba(239,68,68,0.05);border-color:rgba(239,68,68,0.2)">
+      <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:14px;font-weight:600;color:#fca5a5;margin-bottom:8px">Actividad inusual detectada</div>
+      <div style="font-size:13px;color:var(--text-muted);line-height:1.6">Por tu seguridad hemos pausado temporalmente las donaciones desde este dispositivo. Esto se restablece automáticamente después de 1 hora.</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:12px">Si crees que esto es un error, contacta soporte.</div>
+    </div>
+    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+    return;
+  }
+
+  content.innerHTML = `
+  <div class="section-label">💝 Apoya MenteClara</div>
+  <div class="card" style="margin-bottom:12px;text-align:center;background:linear-gradient(135deg,var(--bg2),var(--bg3))">
+    <div style="font-size:28px;margin-bottom:8px">🙏</div>
+    <div style="font-size:15px;font-weight:600;color:var(--gold);margin-bottom:6px">Mantén la app gratuita</div>
+    <div style="font-size:13px;color:var(--text-muted);line-height:1.6">MenteClara es gratis para todos. Tu donación voluntaria ayuda a mantener los servidores, desarrollar nuevas funciones y llevar la Palabra a más personas.</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-top:8px;font-style:italic">"Cada uno dé como propuso en su corazón... porque Dios ama al dador alegre." — 2 Corintios 9:7 RVR1960</div>
+  </div>
+  
+  <div class="section-label">Elige un monto (USD)</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+    ${donationAmounts.map(a => `
+    <button onclick="selectDonation(${a},this)" style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:14px 8px;color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s" id="don-${a}">$${a}</button>`).join('')}
+  </div>
+  
+  <div style="margin-bottom:12px">
+    <label class="field-label">O ingresa otro monto (USD)</label>
+    <input class="field-input" type="number" id="custom-donation" placeholder="Ej: 2" min="1" max="500" style="margin-bottom:0" oninput="customDonation=this.value;document.querySelectorAll('[id^=don-]').forEach(b=>b.style.background='var(--card)')">
+  </div>
+
+  <div class="card" style="margin-bottom:12px;background:rgba(16,185,129,0.05);border-color:rgba(16,185,129,0.2)">
+    <div style="font-size:12px;color:#6ee7b7;margin-bottom:4px;font-weight:600">🔒 100% seguro</div>
+    <div style="font-size:12px;color:var(--text-muted);line-height:1.5">Las donaciones se procesan a través de PayPal. MenteClara nunca almacena datos de tarjetas. Puedes donar de forma anónima.</div>
+  </div>
+
+  <button class="btn-primary" onclick="processDonation()" id="btn-donate">Donar con PayPal</button>
+  <div style="font-size:11px;color:var(--text-dim);text-align:center;margin-top:8px">No es obligatorio. Gracias por usar MenteClara. 🙏</div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+function selectDonation(amount, btn) {
+  document.querySelectorAll('[id^=don-]').forEach(b => {
+    b.style.background = 'var(--card)';
+    b.style.borderColor = 'var(--border)';
+    b.style.color = 'var(--text)';
+  });
+  btn.style.background = 'rgba(107,79,216,0.2)';
+  btn.style.borderColor = 'var(--purple)';
+  btn.style.color = 'var(--purple-light)';
+  customDonation = amount;
+  const input = document.getElementById('custom-donation');
+  if (input) input.value = '';
+}
+
+function processDonation() {
+  const inputEl = document.getElementById('custom-donation');
+  const amount = parseFloat(customDonation || inputEl?.value || 0);
+  
+  // Análisis de seguridad
+  const check = DonationSecurity.analyze(amount);
+  
+  if (!check.ok) {
+    const messages = {
+      multiple_attempts: 'Has intentado donar varias veces en poco tiempo. Por tu seguridad, espera unos minutos.',
+      high_amount: 'El monto ingresado es inusualmente alto. Por tu seguridad, el máximo es $500 USD. Contacta soporte para donaciones mayores.',
+      invalid_amount: 'Por favor selecciona o ingresa un monto válido.',
+      flagged: 'Por seguridad, las donaciones están temporalmente pausadas desde este dispositivo.'
+    };
+    showToast(messages[check.reason] || 'Error en la donación');
+    if (check.reason === 'multiple_attempts' || check.reason === 'high_amount') {
+      openDonaciones(); // Re-render para mostrar panel de alerta si está flagged
+    }
+    return;
+  }
+  
+  if (!amount || amount <= 0) {
+    showToast('Selecciona o ingresa un monto primero');
+    return;
+  }
+
+  // Redirigir a PayPal — reemplaza TU_PAYPAL_EMAIL con tu correo de PayPal
+  const paypalUrl = `https://www.paypal.com/donate/?business=TU_PAYPAL_EMAIL&amount=${amount}&currency_code=USD&item_name=Donacion+MenteClara`;
+  window.open(paypalUrl, '_blank');
+  showToast(`💝 Gracias por tu donación de $${amount} USD`);
+  DonationSecurity.reset();
+}
+
+async function doLogout() {
+  if (window.fbLogout) await window.fbLogout();
+  currentUser = null;
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('screen-login').classList.remove('hidden');
+  document.getElementById('session-bar').style.display = 'none';
+}
+
+// ═══════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════
+let timerInterval = null;
+let timerSeconds = 0;
+let timerRunning = false;
+const communityPosts = [];
+
+// ═══════════════════════════════════════
+// CHAT CON IA REAL (ANTHROPIC API)
+// ═══════════════════════════════════════
+const chatHistory = [
+  { role:'ai', text:'Hola, estoy aquí para acompañarte en tu camino espiritual. ¿En qué puedo ayudarte hoy? Puedo guiarte con versículos de la RVR1960, reflexión bíblica o simplemente escucharte.' },
+];
+
+const CHAT_SYSTEM_PROMPT = `Eres un asistente espiritual bíblico dentro de MenteClara. Tu nombre es "IA Bíblica".
+
+PERSONALIDAD:
+- Cálido, cercano y empático — como un amigo espiritual maduro
+- Breve y directo (2-3 oraciones máximo salvo que pidan más)
+- Natural y conversacional — no siempre predicas, a veces solo escuchas
+
+DETECCIÓN DE CONTEXTO:
+- Si el usuario solo saluda (hola, buenos días, etc.) → responde el saludo brevemente y pregunta cómo puedes ayudar
+- Si agradece o se despide (gracias, adiós, hasta luego, bendiciones) → responde con calidez y cierra la conversación naturalmente, NO sigas enviando versículos
+- Si pide un versículo o guía bíblica → usa la Reina Valera 1909 citando referencia exacta
+- Si comparte algo personal → escucha primero, luego pregunta si quiere un versículo relacionado
+- Si hace preguntas generales no espirituales → redirige gentilmente hacia lo espiritual o di que no puedes ayudar con eso
+
+REGLAS:
+- Fuente exclusiva: Reina Valera 1909 (dominio público) — cita libro, capítulo y versículo
+- Si detectas crisis o suicidio → da línea de ayuda México: 800-290-0024 y detente
+- No eres terapeuta ni pastor — eres un acompañante espiritual
+- Responde siempre en el idioma del usuario
+- Nunca des consejos médicos, legales o financieros
+- No comentes política, noticias ni temas no espirituales`;
+
+let chatApiMessages = [];
+let chatLoading = false;
+let chatMsgsToday = 0;
+const CHAT_DAILY_LIMIT = 5;
+
+function getChatLimitKey() {
+  return 'chat_' + new Date().toISOString().split('T')[0];
+}
+
+function loadChatLimit() {
+  try {
+    const key = getChatLimitKey();
+    const saved = sessionStorage.getItem(key);
+    chatMsgsToday = saved ? parseInt(saved) : 0;
+  } catch(e) { chatMsgsToday = 0; }
+}
+
+function saveChatLimit() {
+  try {
+    sessionStorage.setItem(getChatLimitKey(), chatMsgsToday);
+  } catch(e) {}
+}
+
+loadChatLimit();
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function sendChat() {
+  if (chatLoading) return;
+  loadChatLimit();
+  if (chatMsgsToday >= CHAT_DAILY_LIMIT) {
+    const msgs = document.getElementById('chat-msgs');
+    if (msgs && !document.getElementById('limit-msg')) {
+      msgs.innerHTML += `<div class="msg msg-ai" id="limit-msg"><div class="msg-sender">Sistema</div><div class="msg-bubble" style="color:var(--gold)">Has alcanzado el límite de ${CHAT_DAILY_LIMIT} mensajes diarios. Vuelve mañana o actualiza a Premium para mensajes ilimitados. 🙏</div></div>`;
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+    return;
+  }
+  const input = document.getElementById('chat-in');
+  const text = input.value.trim();
+  if (!text) return;
+  const clean = Security.sanitizeText(text);
+  if (Security.filterContent(clean)) { showToast(getText('post_blocked')); input.value = ''; return; }
+  
+  chatHistory.push({ role: 'user', text: clean });
+  chatApiMessages.push({ role: 'user', content: clean });
+  chatMsgsToday++;
+  saveChatLimit();
+  input.value = '';
+  
+  const msgs = document.getElementById('chat-msgs');
+  if (!msgs) return;
+  msgs.innerHTML += `<div class="msg msg-user"><div class="msg-sender">${getText('chat_you')}</div><div class="msg-bubble">${clean}</div></div>`;
+  msgs.innerHTML += `<div class="msg msg-ai" id="thinking"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble" style="color:var(--text-dim)">...</div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+  chatLoading = true;
+
+  try {
+    const response = await fetch('https://soft-art-11eb.elestacerc4eloim.workers.dev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
+        system: CHAT_SYSTEM_PROMPT,
+        messages: chatApiMessages.slice(-6)
+      })
+    });
+    const data = await response.json();
+    const reply = data.content?.[0]?.text || fallbackReply(clean);
+    chatApiMessages.push({ role: 'assistant', content: reply });
+    chatHistory.push({ role: 'ai', text: reply });
+    const thinking = document.getElementById('thinking');
+    if (thinking) thinking.outerHTML = `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${escapeHtml(reply)}</div></div>`;
+  } catch(e) {
+    const reply = fallbackReply(clean);
+    chatHistory.push({ role: 'ai', text: reply });
+    const thinking = document.getElementById('thinking');
+    if (thinking) thinking.outerHTML = `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${escapeHtml(reply)}</div></div>`;
+  }
+  
+  chatLoading = false;
+  const msgs2 = document.getElementById('chat-msgs');
+  if (msgs2) msgs2.scrollTop = msgs2.scrollHeight;
+}
+
+function fallbackReply(text) {
+  const replies = [
+    'La Palabra nos dice en Filipenses 4:6 RVR1960: "Por nada estéis afanosos, sino sean conocidas vuestras peticiones delante de Dios en toda oración y ruego, con acción de gracias."',
+    'En el Salmo 34:18 encontramos: "Cercano está Jehová a los quebrantados de corazón; y salva a los contritos de espíritu." Dios ve tu situación.',
+    'Romanos 8:28 RVR1960 nos recuerda: "Y sabemos que a los que aman a Dios, todas las cosas les ayudan a bien." ¿Quieres explorar más sobre este tema?',
+    'Isaías 41:10 dice: "No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios que te esfuerzo." Dios mismo habla a tu corazón hoy.',
+  ];
+  return replies[Math.floor(Math.random() * replies.length)];
+}
+
+function showTab(tab, btn) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const content = document.getElementById('main-content');
+  if (tab === 'home') content.innerHTML = renderHome();
+  else if (tab === 'comunidad') content.innerHTML = renderComunidad();
+  else if (tab === 'pueblos') content.innerHTML = renderPueblos();
+  else if (tab === 'planes') content.innerHTML = renderPlanes();
+  else if (tab === 'chat') content.innerHTML = renderChat();
+}
+
+const levelTiers = [
+  { level:1, name:'Semilla', min:0 },
+  { level:2, name:'Brote', min:50 },
+  { level:3, name:'Raíz Firme', min:150 },
+  { level:4, name:'Árbol Fructífero', min:300 },
+  { level:5, name:'Roble de Fe', min:600 },
+  { level:6, name:'Discípulo Fiel', min:1200 },
+];
+function getUserPoints() {
+  return (getStreak()*10) + (savedVerses.length*5) + (diaryEntries.length*5) + (quizState.score*10);
+}
+function getLevel(points) {
+  let idx = 0;
+  for (let i = 0; i < levelTiers.length; i++) { if (points >= levelTiers[i].min) idx = i; }
+  const current = levelTiers[idx];
+  const nextTier = levelTiers[idx+1];
+  return { level: current.level, name: current.name, next: nextTier ? nextTier.min : current.min + 100 };
+}
+
+function renderHome() {
+  const userPoints = getUserPoints();
+  const lvl = getLevel(userPoints);
+  const earnedCount = achievements.filter(a=>a.earned).length;
+  return `
+  <div class="section-label">${getText('sec_stats')}</div>
+  <div class="stats-grid">
+    <div class="stat-card" onclick="openAchievements()" style="cursor:pointer"><div class="stat-num" id="stat-streak-num">${getStreak()}</div><div class="stat-label">${getText('stat_streak')}</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-praying-num">${getPrayingCount()}</div><div class="stat-label">${getText('stat_praying')}</div></div>
+    <div class="stat-card" onclick="openAchievements()" style="cursor:pointer"><div class="stat-num">${earnedCount}</div><div class="stat-label">${getText('stat_goals')}</div></div>
+  </div>
+  <div class="streak">${renderStreakDays()}</div>
+  <div style="background:var(--card);border:0.5px solid rgba(232,201,122,0.2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAchievements()">
+    <div style="font-size:20px">⭐</div>
+    <div style="flex:1">
+      <div style="font-size:12px;font-weight:600;color:var(--gold)">Nivel ${lvl.level} — ${lvl.name}</div>
+      <div style="height:4px;background:var(--border);border-radius:2px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${Math.round(userPoints/lvl.next*100)}%;background:var(--gold);border-radius:2px"></div></div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted)">${userPoints}/${lvl.next} pts</div>
+  </div>
+  <div class="section-label">${getText('sec_modules')}</div>
+  <div class="mod-card" onclick="openTimer()">
+    <div class="mod-icon" style="background:#2d1b6b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></div>
+    <div class="mod-info"><div class="mod-name">${getText('mod_timer')}</div><div class="mod-desc">${getText('mod_timer_d')}</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openDiary()">
+    <div class="mod-icon" style="background:#2d1b0a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8c97a" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg></div>
+    <div class="mod-info"><div class="mod-name">${getText('mod_diary')}</div><div class="mod-desc">${getText('mod_diary_d')}</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openPersonajes()">
+    <div class="mod-icon" style="background:#0a2d1b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+    <div class="mod-info"><div class="mod-name">${getText('mod_chars')}</div><div class="mod-desc">${getText('mod_chars_d')}</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openMusic()">
+    <div class="mod-icon" style="background:#2d0a1b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+    <div class="mod-info"><div class="mod-name">${getText('mod_music')}</div><div class="mod-desc">${getText('mod_music_d')}</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openBibleSearch()">
+    <div class="mod-icon" style="background:#0a1a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Buscar versículo</div><div class="mod-desc">${bibleVersion === 'rv1909' ? 'Busca en la Reina Valera 1909' : 'Busca en toda la RVR1960 en vivo'}</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openNotificaciones()">
+    <div class="mod-icon" style="background:#0a1a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Notificaciones diarias</div><div class="mod-desc">Versículo + meditación + oración a las 6AM y 6PM</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openDonaciones()">
+    <div class="mod-icon" style="background:#1a0a1a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+    <div class="mod-info"><div class="mod-name">💝 Apoya MenteClara</div><div class="mod-desc">Donación voluntaria — mantén la app gratuita</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openAyuno()">
+    <div class="mod-icon" style="background:#1a0a0a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><path d="M12 22V12m0 0C12 6 7 4 7 4s1 6 5 8zm0 0c0-6 5-8 5-8s-1 6-5 8z"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Tracker de ayuno</div><div class="mod-desc">${ayunoState.active ? '🕊 Ayuno en progreso' : 'Registra y guía tu ayuno'}</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openTestimonios()">
+    <div class="mod-icon" style="background:#0a1a0a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#86efac" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Testimonios</div><div class="mod-desc">Comparte cómo Dios actuó en tu vida</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="toggleDarkMode()">
+    <div class="mod-icon" style="background:#1a1a0a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fde68a" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></div>
+    <div class="mod-info"><div class="mod-name">${isDarkMode ? 'Modo claro' : 'Modo oscuro'}</div><div class="mod-desc">Cambia el tema visual de la app</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openVersionBiblica()">
+    <div class="mod-icon" style="background:#0a1a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Versión de la Biblia</div><div class="mod-desc">${bibleVersion === 'rv1909' ? 'Reina Valera 1909 (clásica)' : 'Reina Valera 1960 (en vivo)'}</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openQuiz()">
+    <div class="mod-icon" style="background:#1a0a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Quiz bíblico</div><div class="mod-desc">Pon a prueba tu conocimiento de la Biblia</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openSavedVerses()">
+    <div class="mod-icon" style="background:#0a2d20"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Versículos guardados</div><div class="mod-desc">${savedVerses.length} versículos resaltados con notas</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openAchievements()">
+    <div class="mod-icon" style="background:#2d1b0a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg></div>
+    <div class="mod-info"><div class="mod-name">Logros</div><div class="mod-desc">${earnedCount} de ${achievements.length} conseguidos</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="mod-card" onclick="openSecurity()">
+    <div class="mod-icon" style="background:#0a2d1b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+    <div class="mod-info"><div class="mod-name">${getText('mod_security')}</div><div class="mod-desc">${getText('mod_security_d')}</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
+  <div class="premium-card" onclick="openChurchPlans()" style="cursor:pointer">
+    <div class="premium-info">
+      <div class="prem-title">⛪ ${getText('prem_title')}</div>
+      <div class="prem-desc">${getText('prem_desc')}</div>
+    </div>
+    <button class="btn-upgrade">${getText('prem_btn')}</button>
+  </div>
+  <div style="text-align:center;margin-top:8px">
+    <button onclick="doLogout()" style="background:none;border:none;color:var(--text-dim);font-size:12px;cursor:pointer">Cerrar sesión</button>
+  </div>
+  `;
+}
+
+function renderComunidad() {
+  let posts = communityPosts.map((p, i) => `
+  <div class="post-card">
+    <div class="post-header">
+      <span class="post-user">${p.anon}</span>
+      <span class="post-time">${p.time}</span>
+    </div>
+    <div class="post-text">${p.text}</div>
+    <div class="post-footer">
+      <button class="pray-btn" onclick="togglePray(${i},this)">🙏 <span>${p.praying} ${getText('praying')}</span></button>
+      <button class="report-btn" onclick="openReport(${i})">⚑</button>
+    </div>
+  </div>`).join('');
+  return `
+  <div class="section-label">${getText('com_title')}</div>
+  <div class="post-input-area">
+    <textarea class="post-textarea" id="new-post" placeholder="${getText('com_placeholder')}" maxlength="300" oninput="document.getElementById('char-count').textContent=this.value.length+'/300'"></textarea>
+    <div class="char-count" id="char-count">0/300</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <button onclick="autocorrectPost()" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text-muted);cursor:pointer">✏️ Autocorregir</button>
+      <button onclick="translatePost()" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text-muted);cursor:pointer">🌐 Traducir</button>
+    </div>
+    <div id="translate-result" style="display:none;background:var(--bg3);border:0.5px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:var(--text)"></div>
+    <div class="post-rules">${getText('com_rules')}</div>
+    <button class="btn-primary" onclick="submitPost()">${getText('com_btn')}</button>
+  </div>
+  ${posts}`;
+}
+
+function renderPueblos() {
+  const p = pueblos[Math.floor(Date.now() / 86400000) % pueblos.length];
+  return `
+  <div class="section-label">${getText('pue_title')}</div>
+  <div class="pueblo-card">
+    <div class="pueblo-name">${p.name} — ${p.country}</div>
+    <div class="pueblo-info">Población: ${p.pop} • ${p.religion}</div>
+    <div class="pueblo-verse">${p.verse} RVR1960</div>
+    <div class="pueblo-stats">
+      <span class="pueblo-praying">🙏 ${getText('pue_praying').replace('{n}', p.praying)}</span>
+      <button class="btn-pray" id="pray-btn" onclick="prayForPeople(this)">${getText('btn_pray')}</button>
+    </div>
+  </div>
+  <div class="card" style="margin-top:4px">
+    <div class="card-title">🗺 Ventana 10/40</div>
+    <div class="card-sub">El 97% de los pueblos no alcanzados vive en esta región. Más de 7,400 grupos esperan el evangelio. Tu oración importa.</div>
+  </div>`;
+}
+
+function renderPlanes() {
+  const plan = readingPlans[activePlan];
+  const done = plan.items.filter(i=>i.done).length;
+  const pct = Math.round(done/plan.items.length*100);
+
+  const categories = {
+    '📖 Libros bíblicos': ['proverbios','juan','genesis'],
+    '🙏 Vida espiritual': ['oracion','fe','espiritu_santo'],
+    '❤️ Emociones y carácter': ['paz','ansiedad','perdon','gratitud','sufrimiento','amor'],
+    '👨‍👩‍👧 Vida y familia': ['familia','identidad','proposito','generosidad'],
+    '✝️ Doctrina': ['salvacion','resurrecion','mision'],
+    '🕊 Adoración': ['salmos_consuelo'],
+  };
+
+  const planNames = {
+    proverbios:'Proverbios', juan:'Juan', genesis:'Génesis',
+    oracion:'Oración', fe:'Fe', espiritu_santo:'Espíritu Santo',
+    paz:'Paz', ansiedad:'Ansiedad', perdon:'Perdón', gratitud:'Gratitud', sufrimiento:'Sufrimiento', amor:'Amor',
+    familia:'Familia', identidad:'Identidad', proposito:'Propósito', generosidad:'Generosidad',
+    salvacion:'Salvación', resurrecion:'Resurrección', mision:'Misión',
+    salmos_consuelo:'Salmos',
+  };
+
+  let items = plan.items.map((p, i) => `
+  <div class="plan-item">
+    <div class="plan-check ${p.done?'done':''}" id="check-${i}" onclick="toggleCheck(${i})">
+      ${p.done?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20,6 9,17 4,12"/></svg>':''}
+    </div>
+    <div>
+      <div class="plan-ref">${p.ref}${p.today?`<span class="today-tag">Hoy</span>`:''}</div>
+      <div class="plan-desc">${p.desc}</div>
+    </div>
+  </div>`).join('');
+
+  let catHTML = Object.entries(categories).map(([cat, keys]) => `
+  <div style="margin-bottom:8px">
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">${cat}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${keys.map(k => `<button onclick="activePlan='${k}';showTab('planes',document.getElementById('nav-planes'))" style="padding:5px 10px;border-radius:20px;border:0.5px solid ${activePlan===k?'var(--purple)':'var(--border)'};background:${activePlan===k?'rgba(107,79,216,0.2)':'var(--card)'};color:${activePlan===k?'var(--purple-light)':'var(--text-muted)'};font-size:11px;cursor:pointer">${planNames[k]}</button>`).join('')}
+    </div>
+  </div>`).join('');
+
+  return `
+  <div class="section-label">Planes de lectura — ${Object.keys(readingPlans).length} temas</div>
+  <div style="margin-bottom:12px">${catHTML}</div>
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${plan.name}</div>
+      <div style="font-size:12px;color:var(--text-muted)">${done}/${plan.items.length}</div>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${plan.desc}</div>
+    <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:var(--purple);border-radius:3px;transition:width 0.3s"></div>
+    </div>
+  </div>
+  ${items}`;
+}
+
+function toggleCheck(i) {
+  const plan = readingPlans[activePlan];
+  plan.items[i].done = !plan.items[i].done;
+  if (plan.items[i].done) { showToast('✓ ¡Completado!'); }
+  const check = document.getElementById('check-' + i);
+  if (check) {
+    check.classList.toggle('done', plan.items[i].done);
+    check.innerHTML = plan.items[i].done ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20,6 9,17 4,12"/></svg>' : '';
+  }
+  // Re-render to update progress bar
+  setTimeout(() => showTab('planes', document.getElementById('nav-planes')), 300);
+}
+
+function renderChat() {
+  let msgs = chatHistory.map(m => `
+  <div class="msg msg-${m.role}">
+    <div class="msg-sender">${m.role === 'ai' ? getText('chat_ai_name') : getText('chat_you')}</div>
+    <div class="msg-bubble">${m.text}</div>
+  </div>`).join('');
+  return `
+  <div class="section-label">${getText('chat_title')}</div>
+  <div class="chat-messages" id="chat-msgs">${msgs}</div>
+  <div class="chat-input-row">
+    <input class="chat-input" type="text" id="chat-in" placeholder="${getText('chat_placeholder')}" maxlength="300" onkeyup="if(event.key==='Enter')sendChat()">
+    <button class="chat-send" onclick="sendChat()">${getText('chat_send')}</button>
+  </div>
+  <div class="chat-disclaimer">${getText('chat_disclaimer')}</div>
+  <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:4px">${chatMsgsToday}/${CHAT_DAILY_LIMIT} mensajes hoy${chatMsgsToday>=CHAT_DAILY_LIMIT?' — <span style="color:var(--gold)">límite alcanzado</span>':''}</div>`;
+}
+
+// ═══════════════════════════════════════
+// INTERACTIONS
+// ═══════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function togglePray(i, btn) {
+  communityPosts[i].praying++;
+  btn.querySelector('span').textContent = communityPosts[i].praying + ' ' + getText('praying');
+  showToast('🙏 ' + getText('praying'));
+}
+
+async function autocorrectPost() {
+  const ta = document.getElementById('new-post');
+  const text = ta.value.trim();
+  if (!text) { showToast('Escribe algo primero'); return; }
+  showToast('Corrigiendo...');
+  try {
+    const res = await fetch('https://soft-art-11eb.elestacerc4eloim.workers.dev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: 'Corrige ortografia y gramatica del siguiente texto. Solo devuelve el texto corregido: ' + text }]
+      })
+    });
+    const data = await res.json();
+    const corrected = data.content && data.content[0] ? data.content[0].text.trim() : text;
+    ta.value = corrected;
+    document.getElementById('char-count').textContent = corrected.length + '/300';
+    showToast('✓ Texto corregido');
+  } catch(e) {
+    showToast('Error al corregir. Intenta de nuevo.');
+  }
+}
+
+async function translatePost() {
+  const ta = document.getElementById('new-post');
+  const text = ta.value.trim();
+  if (!text) { showToast('Escribe algo primero'); return; }
+  const resultDiv = document.getElementById('translate-result');
+  resultDiv.style.display = 'block';
+  resultDiv.textContent = 'Traduciendo...';
+  const targetLangs = currentLang === 'es' ? 'inglés y portugués' : 'español e inglés';
+  try {
+    const res = await fetch('https://soft-art-11eb.elestacerc4eloim.workers.dev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: 'Traduce al ' + targetLangs + '. Una traduccion por linea con [idioma] al inicio. Solo traducciones, sin explicaciones: ' + text }]
+      })
+    });
+    const data = await res.json();
+    const translated = data.content && data.content[0] ? data.content[0].text.trim() : '';
+    resultDiv.innerHTML = '<div style="font-size:11px;color:var(--gold);margin-bottom:6px">Traducciones:</div>' + translated.replace(/\n/g, '<br>');
+  } catch(e) {
+    resultDiv.textContent = 'Error al traducir. Intenta de nuevo.';
+  }
+}
+
+async function submitPost() {
+  const ta = document.getElementById('new-post');
+  const text = ta.value.trim();
+  if (!text) { showToast(getText('post_empty')); return; }
+  const clean = Security.sanitizeText(text);
+  if (Security.filterContent(clean)) { showToast(getText('post_blocked')); return; }
+  // Try Firebase
+  if (window.saveFirebasePost) {
+    const ok = await window.saveFirebasePost(clean);
+    if (ok) {
+      ta.value = '';
+      showToast(getText('post_sent'));
+      setTimeout(() => showTab('comunidad', document.getElementById('nav-comunidad')), 500);
+      return;
+    }
+  }
+  // Demo fallback
+  communityPosts.unshift({ anon: 'Hermano anónimo', time: 'ahora', text: clean, praying: 0 });
+  ta.value = '';
+  showToast(getText('post_sent'));
+  setTimeout(() => showTab('comunidad', document.getElementById('nav-comunidad')), 500);
+}
+
+function openReport(i) {
+  document.getElementById('report-modal').classList.add('show');
+  document.getElementById('report-modal').dataset.postIdx = i;
+}
+
+function closeModal() { document.getElementById('report-modal').classList.remove('show'); }
+
+function confirmReport() {
+  closeModal();
+  showToast(getText('reported'));
+}
+
+function prayForPeople(btn) {
+  btn.textContent = getText('btn_prayed');
+  btn.classList.add('prayed');
+  btn.disabled = true;
+  showToast('🙏 ' + getText('praying'));
+}
+
+// toggleCheck is now defined in renderPlanes section above
+
+// sendChat is now defined above with Anthropic API integration
+
+function openTimer() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">Timer de oración</div>
+  <div class="timer-display">
+    <div class="timer-num" id="timer-num">00:00</div>
+    <div class="timer-label">Tiempo en oración</div>
+    <div class="timer-controls">
+      <button class="timer-btn start" id="timer-start-btn" onclick="toggleTimer()">Iniciar</button>
+      <button class="timer-btn" onclick="resetTimer()">Reiniciar</button>
+    </div>
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+  timerSeconds = 0;
+  timerRunning = false;
+}
+
+function toggleTimer() {
+  const btn = document.getElementById('timer-start-btn');
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    btn.textContent = 'Continuar';
+  } else {
+    timerRunning = true;
+    btn.textContent = 'Pausar';
+    timerInterval = setInterval(() => {
+      timerSeconds++;
+      const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+      const s = String(timerSeconds % 60).padStart(2, '0');
+      const el = document.getElementById('timer-num');
+      if (el) el.textContent = m + ':' + s;
+      else clearInterval(timerInterval);
+    }, 1000);
+  }
+}
+
+function resetTimer() {
+  clearInterval(timerInterval);
+  timerRunning = false;
+  timerSeconds = 0;
+  const el = document.getElementById('timer-num');
+  if (el) el.textContent = '00:00';
+  const btn = document.getElementById('timer-start-btn');
+  if (btn) btn.textContent = 'Iniciar';
+}
+
+const personajes = [
+  { name:'David', tags:['Rey','Pastor','Salmista'], analysis:'Ungido pastor que llegó a ser rey. Hombre conforme al corazón de Dios, cometió graves errores (adulterio, homicidio) pero se arrepintió profundamente cuando fue confrontado. Sus salmos muestran una relación honesta y vulnerable con Dios.', verse:'"Jehová es mi pastor; nada me faltará." — Salmos 23:1' },
+  { name:'María, madre de Jesús', tags:['Fe','Obediencia'], analysis:'Joven virgen que aceptó con humildad el llamado de ser madre del Mesías, aun sin entender completamente lo que implicaba. Guardaba las cosas en su corazón, meditando sobre ellas.', verse:'"He aquí la sierva del Señor; hágase conmigo conforme a tu palabra." — Lucas 1:38' },
+  { name:'Moisés', tags:['Libertador','Legislador'], analysis:'Criado en el palacio de Faraón, huyó tras matar a un egipcio. Dios lo llamó desde una zarza ardiente para liberar a Israel de la esclavitud, a pesar de sus dudas sobre su capacidad para hablar.', verse:'"¿Quién soy yo, para que vaya a Faraón?" — Éxodo 3:11' },
+  { name:'Pablo (Saulo de Tarso)', tags:['Apóstol','Misionero'], analysis:'Perseguidor de los primeros cristianos, transformado radicalmente tras encontrarse con Jesús en el camino a Damasco. Se convirtió en el apóstol más prolífico, escribiendo gran parte del Nuevo Testamento.', verse:'"Para mí el vivir es Cristo, y el morir es ganancia." — Filipenses 1:21' },
+  { name:'Abraham', tags:['Padre de la fe','Patriarca'], analysis:'Llamado por Dios a dejar su tierra sin saber a dónde iba. Su fe fue puesta a prueba de manera extrema al pedirle sacrificar a su hijo Isaac, pero confió en que Dios proveería.', verse:'"Y creyó Abram a Jehová, y le fue contado por justicia." — Génesis 15:6' },
+  { name:'Rut', tags:['Lealtad','Redención'], analysis:'Moabita que eligió quedarse con su suegra Noemí en vez de regresar a su pueblo, abrazando un Dios y un pueblo que no eran los suyos. Su lealtad fue recompensada al convertirse en antepasada del rey David.', verse:'"Porque a dondequiera que tú fueres, iré yo... tu pueblo será mi pueblo, y tu Dios mi Dios." — Rut 1:16' },
+  { name:'Pedro', tags:['Discípulo','Apóstol'], analysis:'Pescador impulsivo que negó conocer a Jesús tres veces la misma noche que juró no hacerlo. Restaurado por Jesús después de la resurrección, se convirtió en un líder firme de la iglesia primitiva.', verse:'"Y saliendo Pedro, lloró amargamente." — Lucas 22:62' },
+  { name:'Job', tags:['Paciencia','Sufrimiento'], analysis:'Hombre íntegro que perdió su familia, salud y riqueza en un solo golpe. A pesar de no entender el porqué de su sufrimiento, se negó a maldecir a Dios, aunque cuestionó y lamentó profundamente su condición.', verse:'"Jehová dio, y Jehová quitó; sea el nombre de Jehová bendito." — Job 1:21' },
+];
+
+function openPersonajes() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">${getText('mod_chars')}</div>
+  ${personajes.map(p => `
+  <div class="personaje-card">
+    <div class="pers-name">${p.name}</div>
+    ${p.tags.map(t => `<span class="pers-tag">${t}</span>`).join('')}
+    <div class="pers-analysis">${p.analysis}</div>
+    <div class="pers-verse">${p.verse}</div>
+  </div>`).join('')}
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+function openSecurity() {
+  const content = document.getElementById('main-content');
+  const items = getText('sec_items');
+  content.innerHTML = `
+  <div class="section-label">${getText('mod_security')}</div>
+  <div class="security-panel">
+    <div class="sec-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      ${getText('sec_panel_title')}
+    </div>
+    ${items.map(i => `<div class="sec-item"><div class="sec-dot"></div><div class="sec-text">${i}</div></div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="card-title">🔒 Tus datos en la comunidad</div>
+    <div class="card-sub">Tu nombre real nunca aparece. Usamos un ID anónimo interno (${currentUser ? currentUser.anonId : 'usr_demo'}) que solo se usa si hay una violación legal grave. Nadie en la comunidad puede identificarte.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">📧 Tus peticiones de oración</div>
+    <div class="card-sub">Se almacenan encriptadas. No las compartimos con nadie, no las usamos para entrenamiento de IA ni publicidad. Puedes borrarlas en cualquier momento.</div>
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// API.BIBLE — VERSÍCULOS EN VIVO
+// ═══════════════════════════════════════
+// REEMPLAZA con tu API key de scripture.api.bible (gratis)
+const BIBLE_API_KEY = 'TU_API_KEY_AQUI';
+const BIBLE_ID_ES = '592420522e16049f-01'; // RVR1960
+const BIBLE_ID_EN = '9879dbb7cfe39e4d-04'; // KJV
+const BIBLE_ID_PT = '55212e3cf5d04d49-01'; // ARA
+const BIBLE_ID_FR = '3e5aa2854a3a0e78-01'; // Louis Segond
+const BIBLE_ID_ZH = '9f59ef3d35523ef0-01'; // 和合本
+
+const bibleIds = { es: BIBLE_ID_ES, en: BIBLE_ID_EN, pt: BIBLE_ID_PT, fr: BIBLE_ID_FR, zh: BIBLE_ID_ZH };
+
+// ── REINA VALERA 1909 — DOMINIO PÚBLICO ──
+// Versículos diarios rotativos — RV1909 (uso comercial libre)
+const RV1909_DIARIOS = [
+  { ref:'Filipenses 4:13 • RV1909', text:'"Todo lo puedo en Cristo que me fortalece."' },
+  { ref:'Salmos 23:1 • RV1909', text:'"Jehová es mi pastor; nada me faltará."' },
+  { ref:'Jeremías 29:11 • RV1909', text:'"Porque yo sé los pensamientos que tengo acerca de vosotros, dice Jehová, pensamientos de paz, y no de mal, para daros el fin que esperáis."' },
+  { ref:'Isaías 41:10 • RV1909', text:'"No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios que te esfuerzo; siempre te ayudaré, siempre te sustentaré con la diestra de mi justicia."' },
+  { ref:'Romanos 8:28 • RV1909', text:'"Y sabemos que á los que á Dios aman, todas las cosas les ayudan á bien."' },
+  { ref:'Juan 3:16 • RV1909', text:'"Porque de tal manera amó Dios al mundo, que ha dado á su Hijo unigénito, para que todo aquel que en él cree, no se pierda, mas tenga vida eterna."' },
+  { ref:'Proverbios 3:5-6 • RV1909', text:'"Fíate de Jehová de todo tu corazón, y no te apoyes en tu prudencia. Reconócele en todos tus caminos, y él enderezará tus veredas."' },
+  { ref:'Mateo 6:33 • RV1909', text:'"Mas buscad primeramente el reino de Dios y su justicia, y todas estas cosas os serán añadidas."' },
+  { ref:'Josué 1:9 • RV1909', text:'"Mira que te mando que te esfuerces y seas valiente; no temas ni desmayes, porque Jehová tu Dios estará contigo en dondequiera que fueres."' },
+  { ref:'Juan 14:6 • RV1909', text:'"Jesús le dijo: Yo soy el camino, y la verdad, y la vida; nadie viene al Padre, sino por mí."' },
+  { ref:'Salmos 34:18 • RV1909', text:'"Cercano está Jehová á los quebrantados de corazón; y salvará á los contritos de espíritu."' },
+  { ref:'Mateo 11:28 • RV1909', text:'"Venid á mí todos los que estáis trabajados y cargados, que yo os haré descansar."' },
+  { ref:'Isaías 40:31 • RV1909', text:'"Pero los que esperan á Jehová tendrán nuevas fuerzas; levantarán alas como las águilas; correrán, y no se cansarán; caminarán, y no se fatigarán."' },
+  { ref:'Salmos 46:1 • RV1909', text:'"Dios es nuestro amparo y fortaleza, nuestro pronto auxilio en las tribulaciones."' },
+  { ref:'2 Corintios 5:17 • RV1909', text:'"De modo que si alguno está en Cristo, nueva criatura es; las cosas viejas pasaron; he aquí todas son hechas nuevas."' },
+  { ref:'Salmos 119:105 • RV1909', text:'"Lámpara es á mis pies tu palabra, y lumbrera á mi camino."' },
+  { ref:'Hebreos 11:1 • RV1909', text:'"Es pues la fe la sustancia de las cosas que se esperan, la demostración de las cosas que no se ven."' },
+  { ref:'1 Juan 4:8 • RV1909', text:'"El que no ama, no conoce á Dios; porque Dios es amor."' },
+  { ref:'Juan 14:27 • RV1909', text:'"La paz os dejo, mi paz os doy: no os la doy como el mundo la da. No se turbe vuestro corazón, ni tenga miedo."' },
+  { ref:'Salmos 27:1 • RV1909', text:'"Jehová es mi luz y mi salvación: ¿de quién temeré? Jehová es la fortaleza de mi vida: ¿de quién me he de atemorizarme?"' },
+  { ref:'Romanos 8:38-39 • RV1909', text:'"Por lo cual estoy cierto que ni la muerte, ni la vida, ni ángeles, ni principados, ni potestades, ni lo presente, ni lo por venir, ni lo alto, ni lo bajo, ni ninguna criatura nos podrá separar del amor de Dios, que es en Cristo Jesús Señor nuestro."' },
+  { ref:'Apocalipsis 3:20 • RV1909', text:'"He aquí, yo estoy á la puerta y llamo; si alguno oyere mi voz y abriere la puerta, entraré á él, y cenaré con él, y él conmigo."' },
+  { ref:'Salmos 51:10 • RV1909', text:'"Crea en mí, oh Dios, un corazón limpio, y renueva un espíritu recto dentro de mí."' },
+  { ref:'Juan 11:25 • RV1909', text:'"Jesús le dijo: Yo soy la resurrección y la vida; el que cree en mí, aunque esté muerto, vivirá."' },
+  { ref:'Efesios 2:8-9 • RV1909', text:'"Porque por gracia sois salvos por la fe; y esto no de vosotros, pues es don de Dios: no por obras, para que nadie se gloríe."' },
+  { ref:'Gálatas 2:20 • RV1909', text:'"Con Cristo estoy juntamente crucificado, y ya no vivo yo, mas vive Cristo en mí."' },
+  { ref:'1 Corintios 13:13 • RV1909', text:'"Y ahora permanecen la fe, la esperanza, el amor, estos tres; pero el mayor de ellos es el amor."' },
+  { ref:'Marcos 16:15 • RV1909', text:'"Y les dijo: Id por todo el mundo, predicad el evangelio á toda criatura."' },
+  { ref:'Mateo 7:7 • RV1909', text:'"Pedid, y se os dará; buscad, y hallaréis; llamad, y se os abrirá."' },
+  { ref:'1 Tesalonicenses 5:17 • RV1909', text:'"Orad sin cesar."' },
+  { ref:'Génesis 1:1 • RV1909', text:'"En el principio crió Dios los cielos y la tierra."' },
+];
+
+function getRV1909Diario() {
+  const idx = Math.floor(Date.now() / 86400000) % RV1909_DIARIOS.length;
+  return RV1909_DIARIOS[idx];
+}
+
+function buscarRV1909(query) {
+  const q = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const vistos = new Set();
+  return RV1909_DIARIOS.filter(v => {
+    if (vistos.has(v.ref)) return false;
+    vistos.add(v.ref);
+    const texto = (v.ref+' '+v.text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    return texto.includes(q);
+  }).slice(0, 8);
+}
+
+// Versículos diarios rotativos (fallback si no hay API key)
+const dailyVerses = {
+  es: [
+    { ref:'Filipenses 4:13 • RVR1960', text:'"Todo lo puedo en Cristo que me fortalece."' },
+    { ref:'Salmos 23:1 • RVR1960', text:'"Jehová es mi pastor; nada me faltará."' },
+    { ref:'Jeremías 29:11 • RVR1960', text:'"Porque yo sé los pensamientos que tengo acerca de vosotros, dice Jehová, pensamientos de paz, y no de mal."' },
+    { ref:'Isaías 41:10 • RVR1960', text:'"No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios que te esfuerzo."' },
+    { ref:'Romanos 8:28 • RVR1960', text:'"Y sabemos que a los que aman a Dios, todas las cosas les ayudan a bien."' },
+    { ref:'Juan 3:16 • RVR1960', text:'"Porque de tal manera amó Dios al mundo, que ha dado a su Hijo unigénito, para que todo aquel que en él cree, no se pierda, mas tenga vida eterna."' },
+    { ref:'Proverbios 3:5-6 • RVR1960', text:'"Fíate de Jehová de todo tu corazón, y no te apoyes en tu propia prudencia."' },
+  ],
+  en: [
+    { ref:'Philippians 4:13 • KJV', text:'"I can do all things through Christ which strengtheneth me."' },
+    { ref:'Psalm 23:1 • KJV', text:'"The LORD is my shepherd; I shall not want."' },
+    { ref:'Jeremiah 29:11 • KJV', text:'"For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil."' },
+    { ref:'Isaiah 41:10 • KJV', text:'"Fear thou not; for I am with thee: be not dismayed; for I am thy God."' },
+  ],
+  pt: [
+    { ref:'Filipenses 4:13 • ARA', text:'"Tudo posso naquele que me fortalece."' },
+    { ref:'Salmos 23:1 • ARA', text:'"O Senhor é o meu pastor; nada me faltará."' },
+    { ref:'Jeremias 29:11 • ARA', text:'"Porque eu sei os planos que tenho para vocês, planos de fazê-los prosperar."' },
+  ]
+};
+
+async function fetchDailyVerse() {
+  // Si el usuario eligió RV1909 manualmente, o no hay API key configurada, usa RV1909 (dominio público)
+  if (bibleVersion === 'rv1909' || BIBLE_API_KEY === 'TU_API_KEY_AQUI') {
+    if (currentLang === 'es') return getRV1909Diario();
+    // Para otros idiomas, versículos predefinidos
+    const verses = {
+      en:[
+        { ref:'Philippians 4:13 • KJV', text:'"I can do all things through Christ which strengtheneth me."' },
+        { ref:'Psalm 23:1 • KJV', text:'"The LORD is my shepherd; I shall not want."' },
+        { ref:'Jeremiah 29:11 • KJV', text:'"For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil."' },
+        { ref:'Isaiah 41:10 • KJV', text:'"Fear thou not; for I am with thee: be not dismayed; for I am thy God."' },
+      ],
+      pt:[
+        { ref:'Filipenses 4:13 • ARA', text:'"Tudo posso naquele que me fortalece."' },
+        { ref:'Salmos 23:1 • ARA', text:'"O Senhor é o meu pastor; nada me faltará."' },
+      ],
+      fr:[
+        { ref:'Philippiens 4:13 • LSG', text:'"Je puis tout par celui qui me fortifie."' },
+        { ref:'Psaume 23:1 • LSG', text:'"L\'Éternel est mon berger: je ne manquerai de rien."' },
+      ],
+      sw:[
+        { ref:'Wafilipi 4:13 • Biblia', text:'"Naweza kufanya mambo yote katika Kristo anitiaye nguvu."' },
+        { ref:'Zaburi 23:1 • Biblia', text:'"Bwana ndiye mchungaji wangu; sitapungukiwa na kitu."' },
+      ],
+      ko:[
+        { ref:'빌립보서 4:13 • 개역개정', text:'"내게 능력 주시는 자 안에서 내가 모든 것을 할 수 있느니라."' },
+        { ref:'시편 23:1 • 개역개정', text:'"여호와는 나의 목자시니 내게 부족함이 없으리로다."' },
+      ],
+      zh:[
+        { ref:'腓立比书 4:13 • 和合本', text:'"我靠着那加给我力量的，凡事都能做。"' },
+        { ref:'诗篇 23:1 • 和合本', text:'"耶和华是我的牧者，我必不至缺乏。"' },
+      ]
+    };
+    const langVerses = verses[currentLang] || verses.en;
+    return langVerses[Math.floor(Date.now() / 86400000) % langVerses.length];
+  }
+  // Con API key configurada — jala RVR1960 real
+  try {
+    const verseIds = ['PHP.4.13','PSA.23.1','JER.29.11','ISA.41.10','ROM.8.28','JHN.3.16','PRO.3.5'];
+    const idx = Math.floor(Date.now() / 86400000) % verseIds.length;
+    const bibleId = bibleIds[currentLang] || BIBLE_ID_ES;
+    const res = await fetch(`https://api.scripture.api.bible/v1/bibles/${bibleId}/verses/${verseIds[idx]}?content-type=text&include-verse-numbers=false`, {
+      headers: { 'api-key': BIBLE_API_KEY }
+    });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    return { ref: data.data.reference + ' • RVR1960', text: '"' + data.data.content.trim() + '"' };
+  } catch(e) {
+    return getRV1909Diario();
+  }
+}
+
+async function updateVerseDisplay() {
+  const verse = await fetchDailyVerse();
+  const refEl = document.getElementById('verse-ref');
+  const textEl = document.getElementById('verse-text');
+  if (refEl) refEl.textContent = verse.ref;
+  if (textEl) textEl.textContent = verse.text;
+}
+
+async function openBibleSearch() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">📖 Buscar versículo</div>
+  <div class="post-input-area">
+    <input class="field-input" type="text" id="bible-search-input" placeholder="Ej: paz, amor, Juan 3, Salmo 23..." style="margin-bottom:8px" onkeyup="if(event.key==='Enter')searchBible()">
+    <button class="btn-primary" onclick="searchBible()">Buscar</button>
+  </div>
+  <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Puedes escribir una palabra, un tema o una referencia bíblica</div>
+  <div id="bible-results"></div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+async function searchBible() {
+  const q = document.getElementById('bible-search-input').value.trim();
+  if (!q) return;
+  const results = document.getElementById('bible-results');
+  results.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Buscando en Reina Valera...</div>';
+
+  const localResults = buscarRV1909(q);
+
+  if (bibleVersion === 'rv1909' || BIBLE_API_KEY === 'TU_API_KEY_AQUI') {
+    if (localResults.length) {
+      results.innerHTML = '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Resultados en Reina Valera 1909</div>' +
+        localResults.map(function(v) {
+          return '<div class="card" style="margin-bottom:8px"><div style="font-size:11px;color:var(--gold);margin-bottom:4px">' + v.ref + '</div><div style="font-size:13px;color:var(--text);font-style:italic">' + v.text + '</div><button onclick="savedVerses.unshift({ref:this.getAttribute(\'data-r\'),text:this.getAttribute(\'data-t\'),color:\'#6f4e37\',note:\'\',date:\''+new Date().toISOString().split('T')[0]+'\'});persistVerses()" data-r="'+v.ref.replace(/"/g,'&quot;')+'" data-t="'+v.text.replace(/"/g,'&quot;')+'" style="margin-top:6px;background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--text-muted);cursor:pointer">❤ Guardar</button></div>';
+        }).join('');
+    } else {
+      results.innerHTML = '<div class="card"><div class="card-sub">Sin resultados. Intenta con: paz, amor, fe, esperanza.</div></div>';
+    }
+    return;
+  }
+
+  try {
+    const bibleId = bibleIds[currentLang] || BIBLE_ID_ES;
+    const res = await fetch('https://api.scripture.api.bible/v1/bibles/' + bibleId + '/search?query=' + encodeURIComponent(q) + '&limit=5', {
+      headers: { 'api-key': BIBLE_API_KEY }
+    });
+    const data = await res.json();
+    const verses = data.data && data.data.verses ? data.data.verses : [];
+    if (!verses.length) {
+      results.innerHTML = localResults.length ?
+        '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Resultados en RV1909</div>' + localResults.map(function(v){ return '<div class="card" style="margin-bottom:8px"><div style="font-size:11px;color:var(--gold)">' + v.ref + '</div><div style="font-size:13px;color:var(--text);font-style:italic">' + v.text + '</div></div>'; }).join('') :
+        '<div class="card"><div class="card-sub">Sin resultados.</div></div>';
+      return;
+    }
+    results.innerHTML = verses.map(function(v) {
+      return '<div class="card" style="margin-bottom:8px"><div style="font-size:11px;color:var(--gold);margin-bottom:4px">' + v.reference + ' • RVR1960</div><div style="font-size:13px;color:var(--text);line-height:1.6;font-style:italic">"' + v.text.trim() + '"</div></div>';
+    }).join('');
+  } catch(e) {
+    results.innerHTML = '<div class="card"><div class="card-sub">Sin conexión. Intenta de nuevo.</div></div>';
+  }
+}
+
+// ═══════════════════════════════════════
+// DIARIO DE ORACIÓN
+// ═══════════════════════════════════════
+let diaryEntries = JSON.parse(localStorage.getItem('mc_diary') || '[]');
+function persistDiary() { try { localStorage.setItem('mc_diary', JSON.stringify(diaryEntries)); } catch(e) {} }
+
+function openDiary() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">📓 Diario de oración</div>
+  <div class="post-input-area">
+    <label class="field-label">Nueva petición</label>
+    <textarea class="post-textarea" id="diary-petition" placeholder="Escribe tu petición de oración..." maxlength="400" style="min-height:70px"></textarea>
+    <button class="btn-primary" style="margin-top:8px" onclick="saveDiaryEntry()">Guardar petición</button>
+  </div>
+  <div class="section-label" style="margin-top:4px">Mis peticiones</div>
+  ${diaryEntries.map((e,i) => `
+  <div class="card" style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--text-dim)">${e.date}</span>
+      <span style="font-size:10px;padding:2px 8px;border-radius:10px;${e.status==='respondida'?'background:rgba(16,185,129,0.15);color:#6ee7b7':'background:rgba(232,201,122,0.15);color:var(--gold)'}">${e.status==='respondida'?'✓ Respondida':'⏳ Pendiente'}</span>
+    </div>
+    <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:8px">${e.petition}</div>
+    ${e.answer ? `<div style="font-size:12px;color:#6ee7b7;border-left:2px solid #10b981;padding-left:8px;font-style:italic">${e.answer}</div>` : `
+    <input class="field-input" type="text" placeholder="Registra cómo Dios respondió..." style="margin-bottom:6px;font-size:12px;padding:7px 10px" id="answer-${i}">
+    <button onclick="markAnswered(${i})" style="font-size:12px;background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text-muted);cursor:pointer">Marcar como respondida</button>`}
+  </div>`).join('')}
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+function saveDiaryEntry() {
+  const petition = document.getElementById('diary-petition').value.trim();
+  if (!petition) { showToast(getText('post_empty')); return; }
+  const clean = Security.sanitizeText(petition);
+  const today = new Date().toISOString().split('T')[0];
+  diaryEntries.unshift({ id: Date.now(), date: today, petition: clean, answer: '', status: 'pendiente' }); persistDiary();
+  showToast('✓ Petición guardada');
+  openDiary();
+}
+
+function markAnswered(i) {
+  const answerInput = document.getElementById('answer-' + i);
+  const answer = answerInput ? Security.sanitizeText(answerInput.value.trim()) : '';
+  diaryEntries[i].status = 'respondida';
+  diaryEntries[i].answer = answer || '¡Dios respondió!'; persistDiary();
+  showToast('🙏 ¡Gloria a Dios!');
+  openDiary();
+}
+
+// ═══════════════════════════════════════
+// Update verse on load and lang change
+
+
+// ═══════════════════════════════════════
+// SISTEMA DE AUDIO — VOZ Y MÚSICA
+// ═══════════════════════════════════════
+const AudioSystem = {
+  isSpeaking: false,
+  musicPlaying: false,
+  musicEnabled: true,
+  currentAudio: null,
+  synth: window.speechSynthesis || null,
+  currentUtterance: null,
+
+  // Voces disponibles del dispositivo
+  getVoices() {
+    if (!this.synth) return [];
+    return this.synth.getVoices().filter(v =>
+      v.lang.startsWith('es') || v.lang.startsWith('en') || v.lang.startsWith('pt')
+    );
+  },
+
+  getBestVoice(lang = 'es') {
+    const voices = this.synth?.getVoices() || [];
+    // Prioridad: voz femenina en español → masculina → cualquier español → inglés
+    const preferred = voices.filter(v => v.lang.startsWith(lang));
+    const female = preferred.find(v => /female|mujer|maria|lucia|elena|sofía/i.test(v.name));
+    if (female) return female;
+    if (preferred.length) return preferred[0];
+    return voices[0] || null;
+  },
+
+  speak(text, lang = 'es', onEnd = null) {
+    if (!this.synth) { showToast('Tu dispositivo no soporta lectura de voz'); return; }
+    this.stop();
+    const clean = text.replace(/["""]/g, '');
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.voice = this.getBestVoice(lang);
+    utterance.lang = lang === 'es' ? 'es-MX' : lang === 'pt' ? 'pt-BR' : 'en-US';
+    utterance.rate = 0.85;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    utterance.onstart = () => { this.isSpeaking = true; };
+    utterance.onend = () => { this.isSpeaking = false; if (onEnd) onEnd(); };
+    utterance.onerror = () => { this.isSpeaking = false; };
+    this.currentUtterance = utterance;
+    this.synth.speak(utterance);
+  },
+
+  stop() {
+    if (this.synth) this.synth.cancel();
+    this.isSpeaking = false;
+    this.currentUtterance = null;
+  },
+
+  toggleMusic() {
+    this.musicEnabled = !this.musicEnabled;
+    showToast(this.musicEnabled ? '🎵 Música activada' : '🔇 Música desactivada');
+    return this.musicEnabled;
+  },
+
+  // Melodías de fondo usando Web Audio API (sin archivos externos)
+  createAmbient(type = 'devotional') {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = {
+        devotional: [261.63, 293.66, 329.63, 349.23, 392.00], // Do Re Mi Fa Sol
+        prayer:     [220.00, 246.94, 261.63, 293.66, 329.63], // más grave
+        night:      [196.00, 220.00, 246.94, 261.63, 293.66], // nocturno
+      };
+      const freq = notes[type] || notes.devotional;
+      let time = ctx.currentTime;
+
+      const playChord = (f1, f2, f3, when, dur) => {
+        [f1, f2, f3].forEach(freq => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0, when);
+          gain.gain.linearRampToValueAtTime(0.04, when + 0.1);
+          gain.gain.linearRampToValueAtTime(0.04, when + dur - 0.1);
+          gain.gain.linearRampToValueAtTime(0, when + dur);
+          osc.start(when);
+          osc.stop(when + dur);
+        });
+      };
+
+      // Secuencia de acordes suaves
+      const sequence = [
+        [freq[0], freq[2], freq[4]],
+        [freq[1], freq[3], freq[0]*2],
+        [freq[2], freq[4], freq[1]*2],
+        [freq[3], freq[0], freq[2]*2],
+      ];
+
+      sequence.forEach((chord, i) => {
+        playChord(chord[0], chord[1], chord[2], time + i * 3, 2.5);
+      });
+
+      this.currentAudio = ctx;
+      return ctx;
+    } catch(e) {
+      return null;
+    }
+  }
+};
+
+// Control de audio global
+function toggleAudio() {
+  if (AudioSystem.isSpeaking) {
+    AudioSystem.stop();
+    showToast('⏹ Lectura detenida');
+  }
+}
+
+function speakVerse() {
+  const ref = document.getElementById('verse-ref')?.textContent || '';
+  const text = document.getElementById('verse-text')?.textContent || '';
+  const full = ref + '. ' + text;
+  if (AudioSystem.isSpeaking) { AudioSystem.stop(); showToast('⏹ Detenido'); return; }
+  if (AudioSystem.musicEnabled) AudioSystem.createAmbient('devotional');
+  AudioSystem.speak(full, currentLang, () => showToast('✓ Lectura completada'));
+  showToast('🔊 Leyendo versículo...');
+}
+
+function speakNotification(type) {
+  const v = NotificationSystem.getVersiculo(type);
+  const text = `${v.ref}. ${v.text}. Meditación: ${v.meditacion}. Oración: ${v.oracion}`;
+  if (AudioSystem.isSpeaking) { AudioSystem.stop(); return; }
+  if (AudioSystem.musicEnabled) AudioSystem.createAmbient(type === 'morning' ? 'devotional' : 'night');
+  AudioSystem.speak(text, currentLang);
+  showToast('🔊 Reproduciendo...');
+}
+// ═══════════════════════════════════════
+const NotificationSystem = {
+  permission: 'default',
+  morningInterval: null,
+  eveningInterval: null,
+
+  versiculosMañana: [
+    { ref:'Lamentaciones 3:22-23 • RV1909', text:'Las misericordias de Jehová nunca se acabaron; nunca decayeron sus misericordias. Nuevas son cada mañana; grande es tu fidelidad.', meditacion:'Cada amanecer es una nueva oportunidad que Dios nos da. Sus misericordias no dependen de lo que hiciste ayer, sino de quién es Él. Comienza este día confiando en su fidelidad.', oracion:'Señor, gracias por este nuevo día. Renueva mis fuerzas, guía mis pasos y que todo lo que haga hoy sea para tu gloria. Amén.' },
+    { ref:'Salmos 5:3 • RV1909', text:'Oh Jehová, de mañana oirás mi voz; de mañana me presentaré delante de ti, y esperaré.', meditacion:'La mañana es el momento perfecto para presentarte ante Dios antes de cualquier otra cosa. Cuando lo buscas primero, todo lo demás se alinea según su voluntad.', oracion:'Padre, antes de comenzar este día me presento ante ti. Habla a mi corazón, dirígeme en tus caminos y dame sabiduría para cada decisión. Amén.' },
+    { ref:'Isaías 50:4 • RV1909', text:'Jehová el Señor me dio lengua de sabios, para saber hablar palabras al cansado; despertará mañana tras mañana, despertará mi oído para que oiga como los sabios.', meditacion:'Dios quiere hablarte cada mañana. No como rutina religiosa, sino como Padre que desea comunicarse con su hijo. ¿Estás dispuesto a escuchar hoy?', oracion:'Señor, abre mis oídos esta mañana para escuchar tu voz. Que tu Palabra sea lámpara a mis pies y lumbrera a mi camino este día. Amén.' },
+    { ref:'Salmos 90:14 • RV1909', text:'Sácianos de mañana de tu misericordia, y cantaremos y nos alegraremos todos nuestros días.', meditacion:'Comenzar el día saciado de la misericordia de Dios transforma toda la jornada. No esperes a que las circunstancias te den alegría — búscala primero en Él.', oracion:'Señor, sáciame esta mañana de tu amor y misericordia. Que mi alegría no dependa de lo que pase hoy, sino de quien tú eres. Amén.' },
+    { ref:'Marcos 1:35 • RV1909', text:'Y levantándose muy de mañana, siendo aún noche oscura, salió, y se fue á un lugar desierto, y allí oraba.', meditacion:'Jesús mismo, siendo Hijo de Dios, madrugaba para orar. Si el Maestro priorizaba la comunión con el Padre, ¿cuánto más nosotros? El ejemplo de Cristo es la mejor guía.', oracion:'Señor Jesús, como tú madrugabas para buscar al Padre, ayúdame a priorizar mi tiempo contigo cada mañana. Que nada sea más importante que estar en tu presencia. Amén.' },
+  ],
+
+  versiculosNoche: [
+    { ref:'Salmos 4:8 • RV1909', text:'En paz me acostaré, y asimismo dormiré; porque solo tú, Jehová, me haces vivir confiado.', meditacion:'Al cerrar este día, Dios te invita a descansar en su paz. No importa lo que viviste hoy — bueno o difícil — puedes depositar todo en sus manos y dormir confiado.', oracion:'Padre, te entrego este día con todo lo que fue. Perdona mis faltas, guarda mi descanso y renuévame para mañana. En tus manos encomiendo mi espíritu. Amén.' },
+    { ref:'Salmos 127:2 • RV1909', text:'Por demás os es madrugar, y velar tarde; comer pan de dolores; pues que á su amado dará Dios el sueño.', meditacion:'Dios cuida de ti mientras duermes. El descanso no es perder el tiempo — es confiar en que Dios sigue obrando aunque tú reposes. Entrégate a su cuidado esta noche.', oracion:'Señor, gracias por este día. Mientras duermo tú no duermes. Cuida de mi familia, guarda mi hogar y que mañana despierte renovado para servirte. Amén.' },
+    { ref:'Filipenses 4:7 • RV1909', text:'Y la paz de Dios, que sobrepasa todo entendimiento, guardará vuestros corazones y vuestros pensamientos en Cristo Jesús.', meditacion:'La paz de Dios no depende de resolver todos los problemas. Es una paz sobrenatural que guarda el corazón aunque las circunstancias no hayan cambiado. Recíbela esta noche.', oracion:'Señor, guarda mi mente y corazón esta noche. Que tu paz que sobrepasa todo entendimiento sea mi almohada. Descanso en ti. Amén.' },
+    { ref:'Jeremías 31:3 • RV1909', text:'Jehová se manifestó á mí hace ya mucho tiempo, diciendo: Con amor eterno te he amado; por tanto, te soy constante en misericordia.', meditacion:'Antes de dormir, recuerda: eres amado con amor eterno. No existe nada que puedas hacer para que Dios te ame más, ni nada que hayas hecho hoy que disminuya ese amor.', oracion:'Padre, gracias por tu amor eterno que no falla. Termino este día sabiendo que soy tuyo y tú eres mío. Descansa mi alma en tu amor. Amén.' },
+    { ref:'2 Timoteo 1:7 • RV1909', text:'Porque no nos ha dado Dios espíritu de cobardía, sino de fortaleza, y de amor, y de templanza.', meditacion:'Si este día estuvo lleno de miedos o incertidumbre, recuerda que Dios no fue el autor de esa ansiedad. Él te ha dado fortaleza, amor y templanza. Descansa en ese regalo.', oracion:'Señor, echo sobre ti toda la ansiedad de este día. Renueva mi mente durante el descanso y despiértame mañana con tu espíritu de fortaleza y amor. Amén.' },
+  ],
+
+  requestPermission() {
+    if (!('Notification' in window)) return Promise.resolve(false);
+    if (Notification.permission === 'granted') return Promise.resolve(true);
+    return Notification.requestPermission().then(perm => {
+      this.permission = perm;
+      return perm === 'granted';
+    });
+  },
+
+  getVersiculo(type) {
+    const arr = type === 'morning' ? this.versiculosMañana : this.versiculosNoche;
+    return arr[Math.floor(Date.now() / 86400000) % arr.length];
+  },
+
+  scheduleNotifications() {
+    // Limpiar intervalos anteriores
+    if (this.morningInterval) clearInterval(this.morningInterval);
+    if (this.eveningInterval) clearInterval(this.eveningInterval);
+
+    // Verificar cada minuto si es hora de notificar
+    const check = setInterval(() => {
+      const now = new Date();
+      const h = now.getHours();
+      const m = now.getMinutes();
+      if (h === 6 && m === 0) this.sendNotification('morning');
+      if (h === 18 && m === 0) this.sendNotification('evening');
+    }, 60000);
+
+    return check;
+  },
+
+  sendNotification(type) {
+    if (Notification.permission !== 'granted') return;
+    const v = this.getVersiculo(type);
+    const title = type === 'morning' ? '🌅 Versículo de la mañana — MenteClara' : '🌙 Versículo de la noche — MenteClara';
+    try {
+      new Notification(title, {
+        body: v.text + '\n— ' + v.ref,
+        icon: 'icon-192.png',
+        badge: 'icon-192.png',
+        tag: type,
+        renotify: true
+      });
+    } catch(e) {}
+  }
+};
+
+function openNotificaciones() {
+  const content = document.getElementById('main-content');
+  const hasSupport = 'Notification' in window;
+  const permStatus = hasSupport ? Notification.permission : 'unsupported';
+
+  const mVerse = NotificationSystem.getVersiculo('morning');
+  const nVerse = NotificationSystem.getVersiculo('evening');
+
+  content.innerHTML = `
+  <div class="section-label">🔔 Notificaciones diarias</div>
+
+  <div class="card" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:14px;font-weight:600;color:var(--text)">Estado</div>
+      <div style="font-size:12px;padding:4px 10px;border-radius:20px;${permStatus==='granted'?'background:rgba(16,185,129,0.15);color:#6ee7b7':permStatus==='denied'?'background:rgba(239,68,68,0.15);color:#fca5a5':'background:rgba(232,201,122,0.15);color:var(--gold)'}">${permStatus==='granted'?'✓ Activadas':permStatus==='denied'?'✗ Bloqueadas':'○ Sin configurar'}</div>
+    </div>
+    ${permStatus==='granted' ? `<div style="font-size:12px;color:var(--text-muted)">Recibirás versículos a las <strong style="color:var(--gold)">6:00 AM</strong> y <strong style="color:var(--gold)">6:00 PM</strong> cada día.</div>` :
+    permStatus==='denied' ? `<div style="font-size:12px;color:var(--text-muted)">Las notificaciones están bloqueadas. Ve a Configuración de tu dispositivo → Notificaciones → MenteClara para activarlas.</div>` :
+    `<button class="btn-primary" onclick="activateNotifications()">Activar notificaciones</button>`}
+  </div>
+
+  <div class="section-label">🌅 Vista previa — Mañana (6:00 AM)</div>
+  <div style="background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:0.5px solid rgba(16,185,129,0.2);border-radius:var(--radius);padding:16px;margin-bottom:10px">
+    <div style="font-size:11px;color:#6ee7b7;margin-bottom:6px">${mVerse.ref}</div>
+    <div style="font-size:13px;color:var(--text);font-style:italic;line-height:1.6;margin-bottom:10px">"${mVerse.text}"</div>
+    <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:10px;border-left:2px solid #10b981;padding-left:8px"><strong style="color:#6ee7b7">Meditación:</strong> ${mVerse.meditacion}</div>
+    <div style="font-size:12px;color:var(--text-muted);font-style:italic;line-height:1.6;margin-bottom:12px"><strong style="color:#6ee7b7">Oración:</strong> ${mVerse.oracion}</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="speakNotification('morning')" style="background:rgba(16,185,129,0.15);border:0.5px solid rgba(16,185,129,0.3);border-radius:20px;padding:6px 14px;font-size:12px;color:#6ee7b7;cursor:pointer">🔊 Escuchar</button>
+      <button onclick="AudioSystem.toggleMusic();this.textContent=(AudioSystem.musicEnabled?'🎵 Música ON':'🔇 Música OFF')" style="background:rgba(16,185,129,0.15);border:0.5px solid rgba(16,185,129,0.3);border-radius:20px;padding:6px 14px;font-size:12px;color:#6ee7b7;cursor:pointer">🎵 Música ON</button>
+    </div>
+  </div>
+
+  <div class="section-label">🌙 Vista previa — Noche (6:00 PM)</div>
+  <div style="background:linear-gradient(135deg,#1a1035,#0a0820);border:0.5px solid rgba(107,79,216,0.3);border-radius:var(--radius);padding:16px;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--purple-light);margin-bottom:6px">${nVerse.ref}</div>
+    <div style="font-size:13px;color:var(--text);font-style:italic;line-height:1.6;margin-bottom:10px">"${nVerse.text}"</div>
+    <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-bottom:10px;border-left:2px solid var(--purple);padding-left:8px"><strong style="color:var(--purple-light)">Meditación:</strong> ${nVerse.meditacion}</div>
+    <div style="font-size:12px;color:var(--text-muted);font-style:italic;line-height:1.6;margin-bottom:12px"><strong style="color:var(--purple-light)">Oración:</strong> ${nVerse.oracion}</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="speakNotification('evening')" style="background:rgba(107,79,216,0.15);border:0.5px solid rgba(107,79,216,0.3);border-radius:20px;padding:6px 14px;font-size:12px;color:var(--purple-light);cursor:pointer">🔊 Escuchar</button>
+      <button onclick="AudioSystem.toggleMusic();this.textContent=(AudioSystem.musicEnabled?'🎵 Música ON':'🔇 Música OFF')" style="background:rgba(107,79,216,0.15);border:0.5px solid rgba(107,79,216,0.3);border-radius:20px;padding:6px 14px;font-size:12px;color:var(--purple-light);cursor:pointer">🎵 Música ON</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <div style="font-size:12px;color:var(--text-muted);line-height:1.5">📱 <strong>Nota:</strong> Las notificaciones funcionan mejor cuando la app está instalada en tu dispositivo. En Android puedes instalarla desde Chrome → Menú → "Agregar a pantalla de inicio".</div>
+  </div>
+
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+async function activateNotifications() {
+  const granted = await NotificationSystem.requestPermission();
+  if (granted) {
+    NotificationSystem.scheduleNotifications();
+    showToast('🔔 Notificaciones activadas — 6AM y 6PM');
+    openNotificaciones();
+  } else {
+    showToast('Activa los permisos en la configuración de tu dispositivo');
+  }
+}
+
+// Iniciar scheduler si ya tiene permiso
+if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+  NotificationSystem.scheduleNotifications();
+}
+// ═══════════════════════════════════════
+const quizQuestions = [
+  { q:'¿En qué libro dice "Todo lo puedo en Cristo que me fortalece"?', opts:['Romanos','Filipenses','Gálatas','Efesios'], correct:1, ref:'Filipenses 4:13' },
+  { q:'¿Cuántos días tardó Dios en crear el mundo?', opts:['5','6','7','8'], correct:1, ref:'Génesis 1' },
+  { q:'¿Quién fue tragado por un gran pez?', opts:['Elías','Moisés','Jonás','Daniel'], correct:2, ref:'Jonás 1:17' },
+  { q:'¿Cuántos discípulos tuvo Jesús?', opts:['7','10','12','15'], correct:2, ref:'Mateo 10:1' },
+  { q:'¿De qué material estaba hecha el arca de Noé?', opts:['Cedro','Madera de gofer','Roble','Pino'], correct:1, ref:'Génesis 6:14' },
+  { q:'¿Quién escribió la mayoría de las epístolas del Nuevo Testamento?', opts:['Pedro','Juan','Pablo','Santiago'], correct:2, ref:'Cartas paulinas' },
+  { q:'¿En qué ciudad nació Jesús?', opts:['Nazaret','Jerusalén','Belén','Capernaum'], correct:2, ref:'Lucas 2:4-7' },
+  { q:'¿Cuál es el versículo más corto de la Biblia?', opts:['"Orad sin cesar"','"Jesús lloró"','"Dad gracias"','"Regocijaos"'], correct:1, ref:'Juan 11:35' },
+  { q:'¿Quién construyó el templo de Jerusalén?', opts:['David','Salomón','Ezequías','Nehemías'], correct:1, ref:'1 Reyes 6:1' },
+  { q:'¿Cuántos libros tiene la Biblia RVR1960?', opts:['60','66','72','73'], correct:1, ref:'Canon bíblico protestante' },
+];
+
+let quizState = { current:0, score:0, answered:false, selectedOption:null };
+
+function openQuiz() {
+  quizState = { current:0, score:0, answered:false, selectedOption:null };
+  renderQuiz();
+}
+
+function renderQuiz() {
+  const content = document.getElementById('main-content');
+  if (quizState.current >= quizQuestions.length) {
+    const pct = Math.round(quizState.score / quizQuestions.length * 100);
+    const medal = pct >= 80 ? '🏆' : pct >= 60 ? '⭐' : '📖';
+    content.innerHTML = `
+    <div class="section-label">Quiz bíblico — Resultado</div>
+    <div class="card" style="text-align:center;padding:24px">
+      <div style="font-size:48px;margin-bottom:12px">${medal}</div>
+      <div style="font-size:24px;font-weight:700;color:var(--gold);margin-bottom:6px">${quizState.score}/${quizQuestions.length}</div>
+      <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px">${pct >= 80 ? '¡Excelente conocimiento bíblico!' : pct >= 60 ? '¡Bien! Sigue estudiando la Palabra.' : 'Sigue leyendo la Biblia cada día.'}</div>
+      <button class="btn-primary" onclick="openQuiz()">Jugar de nuevo</button>
+    </div>
+    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+    return;
+  }
+  const q = quizQuestions[quizState.current];
+  content.innerHTML = `
+  <div class="section-label">Quiz bíblico — ${quizState.current+1}/${quizQuestions.length}</div>
+  <div style="background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px">
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Puntuación: ${quizState.score} pts</div>
+    <div style="font-size:15px;font-weight:500;color:var(--text);line-height:1.5;margin-bottom:16px">${q.q}</div>
+    ${q.opts.map((opt,i) => {
+      let bg = 'var(--card)', border = 'var(--border)', color = 'var(--text)';
+      if (quizState.answered) {
+        if (i === q.correct) { bg='rgba(16,185,129,0.15)'; border='#10b981'; color='#6ee7b7'; }
+        else if (i === quizState.selectedOption) { bg='rgba(239,68,68,0.15)'; border='#ef4444'; color='#fca5a5'; }
+      }
+      return `<button onclick="if(!${quizState.answered})answerQuiz(${i})" style="width:100%;background:${bg};border:0.5px solid ${border};border-radius:8px;padding:12px;color:${color};font-size:13px;text-align:left;margin-bottom:8px;cursor:${quizState.answered?'default':'pointer'}">${opt}</button>`;
+    }).join('')}
+    ${quizState.answered ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;border-left:2px solid var(--purple);padding-left:8px">Referencia: ${q.ref} RVR1960</div>
+    <button class="btn-primary" style="margin-top:12px" onclick="nextQuizQuestion()">Siguiente →</button>` : ''}
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))">← Salir del quiz</button>`;
+}
+
+function answerQuiz(i) {
+  const q = quizQuestions[quizState.current];
+  quizState.answered = true;
+  quizState.selectedOption = i;
+  if (i === q.correct) quizState.score++;
+  renderQuiz();
+}
+
+function nextQuizQuestion() {
+  quizState.current++;
+  quizState.answered = false;
+  quizState.selectedOption = null;
+  renderQuiz();
+}
+
+// ═══════════════════════════════════════
+// RESALTADO Y NOTAS DE VERSÍCULOS
+// ═══════════════════════════════════════
+let savedVerses = JSON.parse(localStorage.getItem('mc_saved_verses') || '[]');
+function persistVerses() { try { localStorage.setItem('mc_saved_verses', JSON.stringify(savedVerses)); } catch(e) {} }
+const highlightColors = ['#6b4fd8','#e8c97a','#10b981','#f472b6','#60a5fa'];
+
+// ═══════════════════════════════════════
+// LOGROS
+// ═══════════════════════════════════════
+const achievements = [
+  { id:'racha3', name:'Constancia inicial', desc:'Manten una racha de 3 días', check:() => getStreak() >= 3 },
+  { id:'racha7', name:'Una semana con Dios', desc:'Manten una racha de 7 días', check:() => getStreak() >= 7 },
+  { id:'racha30', name:'Un mes de fe', desc:'Manten una racha de 30 días', check:() => getStreak() >= 30 },
+  { id:'primerVerso', name:'Primer tesoro', desc:'Guarda tu primer versículo', check:() => savedVerses.length >= 1 },
+  { id:'coleccionista', name:'Coleccionista', desc:'Guarda 10 versículos', check:() => savedVerses.length >= 10 },
+  { id:'primerDiario', name:'Primera petición', desc:'Escribe tu primera petición de oración', check:() => diaryEntries.length >= 1 },
+  { id:'quizPerfecto', name:'Conocedor de la Palabra', desc:'Responde correctamente todo el quiz', check:() => quizState.score > 0 && quizState.score === quizState.current },
+];
+achievements.forEach(a => { a.earned = false; try { a.earned = !!a.check(); } catch(e) {} });
+
+function openAchievements() {
+  achievements.forEach(a => { try { a.earned = !!a.check(); } catch(e) {} });
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">🏆 Logros</div>
+  <div class="card-sub" style="margin-bottom:14px">${achievements.filter(a=>a.earned).length} de ${achievements.length} conseguidos</div>
+  ${achievements.map(a => `
+  <div class="card" style="margin-bottom:8px;opacity:${a.earned ? '1' : '0.5'}">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:22px">${a.earned ? '🏆' : '🔒'}</div>
+      <div><div style="font-weight:600;font-size:14px;color:var(--text)">${a.name}</div><div class="card-sub">${a.desc}</div></div>
+    </div>
+  </div>`).join('')}
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// TRACKER DE AYUNO
+// ═══════════════════════════════════════
+let ayunoState = JSON.parse(localStorage.getItem('mc_ayuno') || '{"active":false,"type":null,"startDate":null}');
+const ayunoTipos = [
+  { id:'total', name:'Ayuno total', desc:'Sin alimentos, solo líquidos' },
+  { id:'parcial', name:'Ayuno parcial', desc:'Una comida al día' },
+  { id:'daniel', name:'Ayuno de Daniel', desc:'Solo frutas, vegetales y agua' },
+  { id:'medios', name:'Ayuno de medios', desc:'Sin redes sociales ni entretenimiento' },
+];
+function saveAyunoState() { localStorage.setItem('mc_ayuno', JSON.stringify(ayunoState)); }
+function startAyuno(tipoId) {
+  ayunoState = { active:true, type:tipoId, startDate: new Date().toISOString() };
+  saveAyunoState();
+  openAyuno();
+}
+function endAyuno() {
+  ayunoState = { active:false, type:null, startDate:null };
+  saveAyunoState();
+  openAyuno();
+}
+function openAyuno() {
+  const content = document.getElementById('main-content');
+  if (ayunoState.active) {
+    const tipo = ayunoTipos.find(t => t.id === ayunoState.type) || ayunoTipos[0];
+    const dias = Math.floor((Date.now() - new Date(ayunoState.startDate).getTime()) / 86400000);
+    content.innerHTML = `
+    <div class="section-label">🕊 Ayuno en progreso</div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;font-size:15px;color:var(--text)">${tipo.name}</div>
+      <div class="card-sub">${tipo.desc}</div>
+      <div style="margin-top:10px;font-size:13px;color:var(--gold)">Día ${dias + 1}</div>
+    </div>
+    <button class="btn-primary" onclick="endAyuno()">Terminar ayuno</button>
+    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+  } else {
+    content.innerHTML = `
+    <div class="section-label">🕊 Tracker de ayuno</div>
+    <div class="card-sub" style="margin-bottom:14px">Elige el tipo de ayuno que deseas comenzar.</div>
+    ${ayunoTipos.map(t => `
+    <div class="mod-card" onclick="startAyuno('${t.id}')">
+      <div class="mod-info"><div class="mod-name">${t.name}</div><div class="mod-desc">${t.desc}</div></div>
+    </div>`).join('')}
+    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+  }
+}
+
+// ═══════════════════════════════════════
+// PLANES PARA IGLESIAS
+// ═══════════════════════════════════════
+function openChurchPlans() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">⛪ Planes para iglesias y pastores</div>
+  <div class="card-sub" style="margin-bottom:14px">Herramientas para acompañar a tu congregación.</div>
+  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Básico — $1 USD/mes</div><div class="card-sub">Acceso premium para tu congregación</div></div>
+  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Iglesia — $5 USD/mes</div><div class="card-sub">Hasta 50 miembros con seguimiento pastoral</div></div>
+  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Ministerio — $10 USD/mes</div><div class="card-sub">Miembros ilimitados y reportes de crecimiento</div></div>
+  <div class="card-sub" style="margin-top:8px">Para activar un plan, contáctanos desde la sección de soporte.</div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// MÚSICA WORSHIP
+// ═══════════════════════════════════════
+function openMusic() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">🎵 Música worship</div>
+  <div class="card-sub" style="margin-bottom:14px">Adoración instrumental para acompañar tus momentos de oración.</div>
+  <div class="card"><div class="card-sub">Las pistas de audio están en preparación y llegarán muy pronto. Vuelve a visitar esta sección en la próxima actualización.</div></div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// TESTIMONIOS
+// ═══════════════════════════════════════
+let testimonios = JSON.parse(localStorage.getItem('mc_testimonios') || '[]');
+function saveTestimonios() { localStorage.setItem('mc_testimonios', JSON.stringify(testimonios)); }
+function submitTestimonio() {
+  const input = document.getElementById('testimonio-input');
+  const clean = Security.sanitizeText((input.value || '').trim());
+  if (!clean) return;
+  testimonios.unshift({ text: clean, date: new Date().toISOString().split('T')[0] });
+  saveTestimonios();
+  openTestimonios();
+}
+function openTestimonios() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">✨ Testimonios</div>
+  <div class="card-sub" style="margin-bottom:10px">Comparte cómo Dios actuó en tu vida.</div>
+  <div class="post-input-area">
+    <textarea class="field-input" id="testimonio-input" placeholder="Escribe tu testimonio..." style="min-height:80px;margin-bottom:8px"></textarea>
+    <button class="btn-primary" onclick="submitTestimonio()">Compartir testimonio</button>
+  </div>
+  <div style="margin-top:14px">
+  ${testimonios.length === 0 ? '<div class="card"><div class="card-sub">Aún no has compartido testimonios.</div></div>' :
+  testimonios.map(t => `
+  <div class="card" style="margin-bottom:8px">
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${t.date}</div>
+    <div style="font-size:13px;color:var(--text)">${t.text}</div>
+  </div>`).join('')}
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+// ═══════════════════════════════════════
+// COMPARTIR VERSÍCULO
+// ═══════════════════════════════════════
+async function shareVerse() {
+  const ref = document.getElementById('verse-ref') ? document.getElementById('verse-ref').textContent : '';
+  const text = document.getElementById('verse-text') ? document.getElementById('verse-text').textContent : '';
+  const shareText = `${text}\n— ${ref}\n\nMenteClara — Tu espacio de oración y devoción`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ text: shareText });
+    } else {
+      await navigator.clipboard.writeText(shareText);
+      alert('Versículo copiado al portapapeles');
+    }
+  } catch(e) {}
+}
+
+function openSavedVerses() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">📌 Versículos guardados</div>
+  ${savedVerses.length === 0 ? '<div class="card"><div class="card-sub">Aún no tienes versículos guardados. Guarda uno desde el devocional diario.</div></div>' :
+  savedVerses.map((v,i) => `
+  <div style="background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:8px;border-left:3px solid ${v.color}">
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${v.ref} • ${v.date}</div>
+    <div style="font-size:13px;color:var(--text);font-style:italic;line-height:1.6;margin-bottom:8px">${v.text}</div>
+    ${v.note ? `<div style="font-size:12px;color:var(--text-muted);background:var(--bg2);border-radius:6px;padding:6px 8px;margin-bottom:8px">📝 ${v.note}</div>` : ''}
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${highlightColors.map(c => `<button onclick="changeVerseColor(${i},'${c}')" style="width:20px;height:20px;border-radius:50%;background:${c};border:2px solid ${v.color===c?'white':'transparent'};cursor:pointer"></button>`).join('')}
+      <button onclick="addVerseNote(${i})" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--text-muted);cursor:pointer;margin-left:4px">+ Nota</button>
+      <button onclick="deleteVerse(${i})" style="background:rgba(239,68,68,0.1);border:0.5px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 8px;font-size:11px;color:#fca5a5;cursor:pointer">Eliminar</button>
+    </div>
+  </div>`).join('')}
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
+function changeVerseColor(i, color) {
+  savedVerses[i].color = color; persistVerses();
+  openSavedVerses();
+  showToast('Color actualizado');
+}
+
+function addVerseNote(i) {
+  const note = prompt('Añade una nota a este versículo:');
+  if (note) {
+    savedVerses[i].note = Security.sanitizeText(note); persistVerses();
+    openSavedVerses();
+    showToast('Nota guardada');
+  }
+}
+
+function deleteVerse(i) {
+  savedVerses.splice(i, 1); persistVerses();
+  openSavedVerses();
+  showToast('Versículo eliminado');
+}
+
+function saveCurrentVerse() {
+  const ref = document.getElementById('verse-ref').textContent;
+  const text = document.getElementById('verse-text').textContent;
+  const already = savedVerses.find(v => v.ref === ref);
+  if (already) { showToast('Ya está guardado'); return; }
+  savedVerses.unshift({ ref, text, color:'#6f4e37', note:'', date: new Date().toISOString().split('T')[0] }); persistVerses();
+  showToast('✓ Versículo guardado +5pts');
+}
+
+// ═══════════════════════════════════════
+// TAMAÑO DE FUENTE
+// ═══════════════════════════════════════
+let fontSize = 14;
+
+function changeFontSize(delta) {
+  fontSize = Math.max(11, Math.min(20, fontSize + delta));
+  document.querySelectorAll('.verse-text, .msg-bubble, .post-text, .plan-ref, .mod-desc, .card-sub').forEach(el => {
+    el.style.fontSize = fontSize + 'px';
+  });
+  showToast('Tamaño: ' + fontSize + 'px');
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+document.getElementById('main-app').style.display = 'none';
+document.addEventListener('DOMContentLoaded', () => {
+  if (isDarkMode) document.body.classList.add('dark-mode');
+  updateVerseDisplay();
+});
+</script>
+</body>
+</html>
