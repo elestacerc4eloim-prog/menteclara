@@ -34,7 +34,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, collection, addDoc, getDocs, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, getDocs, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAH_DqIXCpuuVeJJ-H1smLKJMeLz-4hi-s",
@@ -90,9 +90,17 @@ try {
     } catch(e) { return null; }
   };
 
-  window.prayFirebase = async (postId) => {
-    try { await updateDoc(doc(db,'posts',postId), { praying: increment(1) }); } catch(e) {}
-  };
+    window.prayFirebase = async (postId) => {
+          if (!auth.currentUser) return false;
+          try {
+                  const markRef = doc(db, 'posts', postId, 'prayedBy', auth.currentUser.uid);
+                  await setDoc(markRef, { at: serverTimestamp() });
+                  await updateDoc(doc(db,'posts',postId), { praying: increment(1) });
+                  return true;
+          } catch(e) {
+                  return false;
+          }
+    };
 
   window.reportFirebase = async (postId) => {
     try { await updateDoc(doc(db,'posts',postId), { reported: true }); } catch(e) {}
