@@ -556,16 +556,6 @@ const Security = {
   sessionStart: Date.now(),
   sessionTimeout: 60 * 60 * 1000, // 60 min
   
-  hashPassword(pass) {
-    // Simulated hash (in production: bcrypt on server)
-    let hash = 0;
-    for (let i = 0; i < pass.length; i++) {
-      hash = ((hash << 5) - hash) + pass.charCodeAt(i);
-      hash |= 0;
-    }
-    return 'hashed_' + Math.abs(hash).toString(36);
-  },
-  
   validateEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   },
@@ -1420,7 +1410,7 @@ async function sendChat() {
   
   const msgs = document.getElementById('chat-msgs');
   if (!msgs) return;
-  msgs.innerHTML += `<div class="msg msg-user"><div class="msg-sender">${getText('chat_you')}</div><div class="msg-bubble">${clean}</div></div>`;
+  msgs.innerHTML += `<div class="msg msg-user"><div class="msg-sender">${getText('chat_you')}</div><div class="msg-bubble">${escapeHtml(clean)}</div></div>`;
   msgs.innerHTML += `<div class="msg msg-ai" id="thinking"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble" style="color:var(--text-dim)">...</div></div>`;
   msgs.scrollTop = msgs.scrollHeight;
   chatLoading = true;
@@ -1607,10 +1597,10 @@ function renderComunidad() {
   let posts = communityPosts.map((p, i) => `
   <div class="post-card">
     <div class="post-header">
-      <span class="post-user">${p.anon}</span>
-      <span class="post-time">${p.time}</span>
+      <span class="post-user">${escapeHtml(p.anon)}</span>
+      <span class="post-time">${escapeHtml(p.time)}</span>
     </div>
-    <div class="post-text">${p.text}</div>
+    <div class="post-text">${escapeHtml(p.text)}</div>
     <div class="post-footer">
       <button class="pray-btn" onclick="togglePray(${i},this)">🙏 <span>${p.praying} ${getText('praying')}</span></button>
       <button class="report-btn" onclick="openReport(${i})">⚑</button>
@@ -1759,6 +1749,9 @@ async function autocorrectPost() {
   const ta = document.getElementById('new-post');
   const text = ta.value.trim();
   if (!text) { showToast('Escribe algo primero'); return; }
+  loadChatLimit();
+  if (chatMsgsToday >= CHAT_DAILY_LIMIT) { showToast('Has alcanzado tu limite diario de IA. Vuelve manana.'); return; }
+  chatMsgsToday++; saveChatLimit();
   showToast('Corrigiendo...');
   try {
     const res = await fetch('https://soft-art-11eb.elestacerc4eloim.workers.dev', {
@@ -1784,6 +1777,9 @@ async function translatePost() {
   const ta = document.getElementById('new-post');
   const text = ta.value.trim();
   if (!text) { showToast('Escribe algo primero'); return; }
+  loadChatLimit();
+  if (chatMsgsToday >= CHAT_DAILY_LIMIT) { showToast('Has alcanzado tu limite diario de IA. Vuelve manana.'); return; }
+  chatMsgsToday++; saveChatLimit();
   const resultDiv = document.getElementById('translate-result');
   resultDiv.style.display = 'block';
   resultDiv.textContent = 'Traduciendo...';
@@ -1800,7 +1796,7 @@ async function translatePost() {
     });
     const data = await res.json();
     const translated = data.content && data.content[0] ? data.content[0].text.trim() : '';
-    resultDiv.innerHTML = '<div style="font-size:11px;color:var(--gold);margin-bottom:6px">Traducciones:</div>' + translated.replace(/\n/g, '<br>');
+    resultDiv.innerHTML = '<div style="font-size:11px;color:var(--gold);margin-bottom:6px">Traducciones:</div>' + escapeHtml(translated).replace(/\n/g, '<br>');
   } catch(e) {
     resultDiv.textContent = 'Error al traducir. Intenta de nuevo.';
   }
