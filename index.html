@@ -50,7 +50,12 @@ try {
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  onAuthStateChanged(auth, user => { window._fbUser = user || null; });
+  onAuthStateChanged(auth, user => {
+    window._fbUser = user || null;
+    if (user && typeof window.restoreSessionFromFirebase === 'function') {
+      window.restoreSessionFromFirebase(user);
+    }
+  });
 
   window.fbLogin = async (email, pass) => {
     try {
@@ -1038,6 +1043,27 @@ function enterAppAfterRegister() {
   document.getElementById('screen-login').classList.add('hidden');
   showTab('home', document.getElementById('nav-home'));
 }
+
+// Restaura la sesion cuando Firebase confirma que ya habia un usuario logueado
+window.restoreSessionFromFirebase = function(fbUser) {
+  if (!fbUser || currentUser) return;
+  const mainApp = document.getElementById('main-app');
+  if (!mainApp || mainApp.style.display === 'flex') return;
+  const email = fbUser.email || '';
+  currentUser = {
+    email,
+    name: email.split('@')[0],
+    anonId: fbUser.uid ? fbUser.uid.slice(0,8) : Security.generateAnonId(),
+    firebase: true
+  };
+  Security.sessionStart = Date.now();
+  mainApp.style.display = 'flex';
+  ['login','register','verify'].forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    if (el) el.classList.add('hidden');
+  });
+  showTab('home', document.getElementById('nav-home'));
+};
 
 async function doRegister() {
   const name = document.getElementById('reg-name').value.trim();
