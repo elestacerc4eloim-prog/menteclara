@@ -605,10 +605,30 @@ setInterval(() => {
 // SECURITY SYSTEM
 // ═══════════════════════════════════════
 const Security = {
-  loginAttempts: 0,
   maxAttempts: 5,
-  lockoutTime: null,
-  
+
+  // H13 — Antes loginAttempts y lockoutTime solo vivían en memoria: recargar la
+  // página los reseteaba, así que el bloqueo de 5 minutos no bloqueaba nada y el
+  // código aparentaba una protección que no existía.
+  //
+  // Ahora se guardan en localStorage, así que sobreviven recargas y cierres de
+  // la app. Sigue siendo evadible (basta con limpiar los datos del navegador o
+  // usar modo incógnito) porque es una defensa del lado del cliente: sirve para
+  // frenar intentos casuales, no a un atacante decidido. La protección REAL
+  // contra fuerza bruta la aplica Firebase Auth en el servidor, y esa no se
+  // puede evadir desde aquí.
+  _leerEstado() {
+    try {
+      return JSON.parse(localStorage.getItem('mc_login_guard') || '{"intentos":0,"bloqueoHasta":null}');
+    } catch(e) {
+      return { intentos: 0, bloqueoHasta: null };
+    }
+  },
+
+  _guardarEstado(estado) {
+    try { localStorage.setItem('mc_login_guard', JSON.stringify(estado)); } catch(e) {}
+  },
+
   validateEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   },
@@ -629,26 +649,33 @@ const Security = {
   },
   
   checkRateLimit() {
-    if (this.lockoutTime && Date.now() < this.lockoutTime) {
-      const remaining = Math.ceil((this.lockoutTime - Date.now()) / 1000);
+    const estado = this._leerEstado();
+    if (estado.bloqueoHasta && Date.now() < estado.bloqueoHasta) {
+      const remaining = Math.ceil((estado.bloqueoHasta - Date.now()) / 1000);
       return { locked: true, remaining };
     }
-    this.lockoutTime = null;
+    if (estado.bloqueoHasta) {
+      // El bloqueo ya venció: se limpia para no arrastrarlo.
+      this._guardarEstado({ intentos: 0, bloqueoHasta: null });
+    }
     return { locked: false };
   },
   
   recordFailedAttempt() {
-    this.loginAttempts++;
-    if (this.loginAttempts >= this.maxAttempts) {
-      this.lockoutTime = Date.now() + 5 * 60 * 1000; // 5 min lockout
-      this.loginAttempts = 0;
+    const estado = this._leerEstado();
+    estado.intentos++;
+    if (estado.intentos >= this.maxAttempts) {
+      estado.bloqueoHasta = Date.now() + 5 * 60 * 1000; // 5 min de bloqueo
+      estado.intentos = 0;
+      this._guardarEstado(estado);
+      return 0;
     }
-    return this.maxAttempts - this.loginAttempts;
+    this._guardarEstado(estado);
+    return this.maxAttempts - estado.intentos;
   },
   
   resetAttempts() {
-    this.loginAttempts = 0;
-    this.lockoutTime = null;
+    this._guardarEstado({ intentos: 0, bloqueoHasta: null });
   },
   
   generateAnonId() {
@@ -1892,6 +1919,186 @@ const readingPlans = {
       { ref:'Lucas 23:34', desc:'Padre, perdónalos, porque no saben lo que hacen.', done:false, today:false },
       { ref:'Salmo 103:12', desc:'Cuanto está lejos el oriente del occidente, hizo alejar de nosotros nuestras rebeliones.', done:false, today:false },
       { ref:'Marcos 11:25', desc:'Perdonad, si tenéis algo contra alguno, para que vuestro Padre os perdone.', done:false, today:false },
+    ],
+  },
+  juan: {
+    name: 'Juan', desc: 'Conociendo a Jesús en el cuarto evangelio — 7 días',
+    items: [
+      { ref:'Juan 1:1-14', desc:'En el principio era el Verbo, y el Verbo se hizo carne.', done:false, today:true },
+      { ref:'Juan 3:1-17', desc:'El nuevo nacimiento y el amor de Dios por el mundo.', done:false, today:false },
+      { ref:'Juan 4:1-26', desc:'La mujer samaritana y el agua que salta para vida eterna.', done:false, today:false },
+      { ref:'Juan 8:1-11', desc:'El que esté sin pecado, arroje la primera piedra.', done:false, today:false },
+      { ref:'Juan 11:1-44', desc:'Yo soy la resurrección y la vida.', done:false, today:false },
+      { ref:'Juan 14:1-14', desc:'Yo soy el camino, la verdad y la vida.', done:false, today:false },
+      { ref:'Juan 21:15-19', desc:'Pedro restaurado: apacienta mis ovejas.', done:false, today:false },
+    ],
+  },
+  genesis: {
+    name: 'Génesis', desc: 'Los comienzos: creación, promesa y providencia — 7 días',
+    items: [
+      { ref:'Génesis 1:1-31', desc:'En el principio creó Dios los cielos y la tierra.', done:false, today:true },
+      { ref:'Génesis 3:1-24', desc:'La caída y la primera promesa de redención.', done:false, today:false },
+      { ref:'Génesis 6:9-22', desc:'Noé halló gracia ante los ojos de Jehová.', done:false, today:false },
+      { ref:'Génesis 12:1-9', desc:'El llamado de Abram: vete de tu tierra.', done:false, today:false },
+      { ref:'Génesis 22:1-19', desc:'Jehová proveerá: la prueba de Abraham.', done:false, today:false },
+      { ref:'Génesis 28:10-22', desc:'La escalera de Jacob y la promesa de Dios.', done:false, today:false },
+      { ref:'Génesis 50:15-21', desc:'Vosotros pensasteis mal, mas Dios lo encaminó a bien.', done:false, today:false },
+    ],
+  },
+  oracion: {
+    name: 'Oración', desc: 'Aprendiendo a hablar con Dios — 7 días',
+    items: [
+      { ref:'Mateo 6:5-15', desc:'El Padre Nuestro: cómo orar sin apariencias.', done:false, today:true },
+      { ref:'Lucas 11:5-13', desc:'Pedid y se os dará: la insistencia en la oración.', done:false, today:false },
+      { ref:'Filipenses 4:6-7', desc:'Por nada estéis afanosos; presenten sus peticiones a Dios.', done:false, today:false },
+      { ref:'1 Tesalonicenses 5:16-18', desc:'Orad sin cesar; dad gracias en todo.', done:false, today:false },
+      { ref:'Santiago 5:13-18', desc:'La oración eficaz del justo puede mucho.', done:false, today:false },
+      { ref:'Daniel 6:10', desc:'Daniel oraba tres veces al día, como solía hacer antes.', done:false, today:false },
+      { ref:'Mateo 26:36-46', desc:'Getsemaní: no sea como yo quiero, sino como tú.', done:false, today:false },
+    ],
+  },
+  espiritu_santo: {
+    name: 'Espíritu Santo', desc: 'La persona y obra del Consolador — 7 días',
+    items: [
+      { ref:'Juan 14:15-27', desc:'El Padre os dará otro Consolador que esté con vosotros.', done:false, today:true },
+      { ref:'Juan 16:5-15', desc:'El Espíritu de verdad os guiará a toda verdad.', done:false, today:false },
+      { ref:'Hechos 1:4-8', desc:'Recibiréis poder cuando venga sobre vosotros el Espíritu.', done:false, today:false },
+      { ref:'Hechos 2:1-21', desc:'Pentecostés: el derramamiento del Espíritu.', done:false, today:false },
+      { ref:'Romanos 8:1-17', desc:'Los que son guiados por el Espíritu son hijos de Dios.', done:false, today:false },
+      { ref:'Gálatas 5:16-26', desc:'El fruto del Espíritu: amor, gozo, paz, paciencia.', done:false, today:false },
+      { ref:'1 Corintios 12:1-11', desc:'Diversidad de dones, pero un mismo Espíritu.', done:false, today:false },
+    ],
+  },
+  paz: {
+    name: 'Paz', desc: 'Descanso en medio del ruido — 7 días',
+    items: [
+      { ref:'Juan 14:27', desc:'La paz os dejo, mi paz os doy; no como el mundo la da.', done:false, today:true },
+      { ref:'Isaías 26:3', desc:'Tú guardarás en completa paz a aquel cuyo pensamiento en ti persevera.', done:false, today:false },
+      { ref:'Salmo 4:8', desc:'En paz me acostaré, y asimismo dormiré.', done:false, today:false },
+      { ref:'Romanos 5:1', desc:'Justificados por la fe, tenemos paz para con Dios.', done:false, today:false },
+      { ref:'Colosenses 3:15', desc:'Que la paz de Dios gobierne en vuestros corazones.', done:false, today:false },
+      { ref:'Mateo 5:9', desc:'Bienaventurados los pacificadores, porque serán llamados hijos de Dios.', done:false, today:false },
+      { ref:'Marcos 4:35-41', desc:'Calla, enmudece: Jesús calma la tormenta.', done:false, today:false },
+    ],
+  },
+  gratitud: {
+    name: 'Gratitud', desc: 'Aprender a dar gracias en todo — 7 días',
+    items: [
+      { ref:'Salmo 100', desc:'Entrad por sus puertas con acción de gracias.', done:false, today:true },
+      { ref:'1 Tesalonicenses 5:18', desc:'Dad gracias en todo, porque esta es la voluntad de Dios.', done:false, today:false },
+      { ref:'Lucas 17:11-19', desc:'Los diez leprosos: solo uno volvió a dar gracias.', done:false, today:false },
+      { ref:'Salmo 103:1-5', desc:'Bendice, alma mía, a Jehová, y no olvides ninguno de sus beneficios.', done:false, today:false },
+      { ref:'Colosenses 3:16-17', desc:'Todo lo que hagáis, hacedlo dando gracias a Dios.', done:false, today:false },
+      { ref:'Filipenses 4:11-13', desc:'He aprendido a contentarme, cualquiera que sea mi situación.', done:false, today:false },
+      { ref:'Salmo 136:1-9', desc:'Alabad a Jehová, porque para siempre es su misericordia.', done:false, today:false },
+    ],
+  },
+  sufrimiento: {
+    name: 'Sufrimiento', desc: 'Cuando el dolor no tiene explicación — 7 días',
+    items: [
+      { ref:'Job 1:13-22', desc:'Jehová dio, y Jehová quitó; sea el nombre de Jehová bendito.', done:false, today:true },
+      { ref:'Salmo 34:17-19', desc:'Muchas son las aflicciones del justo, pero de todas le librará.', done:false, today:false },
+      { ref:'Romanos 5:3-5', desc:'La tribulación produce paciencia; la paciencia, prueba.', done:false, today:false },
+      { ref:'2 Corintios 1:3-7', desc:'El Dios de toda consolación nos consuela en toda tribulación.', done:false, today:false },
+      { ref:'2 Corintios 12:7-10', desc:'Bástate mi gracia; mi poder se perfecciona en la debilidad.', done:false, today:false },
+      { ref:'1 Pedro 4:12-19', desc:'No os sorprendáis del fuego de prueba que os ha sobrevenido.', done:false, today:false },
+      { ref:'Apocalipsis 21:1-5', desc:'Enjugará Dios toda lágrima; no habrá más llanto ni dolor.', done:false, today:false },
+    ],
+  },
+  amor: {
+    name: 'Amor', desc: 'El mandamiento más grande — 7 días',
+    items: [
+      { ref:'1 Corintios 13', desc:'El amor es sufrido, es benigno; nunca deja de ser.', done:false, today:true },
+      { ref:'1 Juan 4:7-21', desc:'Dios es amor; el que permanece en amor permanece en Dios.', done:false, today:false },
+      { ref:'Juan 13:34-35', desc:'En esto conocerán todos que sois mis discípulos.', done:false, today:false },
+      { ref:'Mateo 22:34-40', desc:'Amarás al Señor tu Dios y a tu prójimo como a ti mismo.', done:false, today:false },
+      { ref:'Lucas 10:25-37', desc:'El buen samaritano: ¿quién es mi prójimo?', done:false, today:false },
+      { ref:'Romanos 12:9-21', desc:'El amor sea sin fingimiento; venced con el bien el mal.', done:false, today:false },
+      { ref:'Lucas 15:11-32', desc:'El hijo pródigo: el amor del padre que espera.', done:false, today:false },
+    ],
+  },
+  familia: {
+    name: 'Familia', desc: 'El hogar como terreno santo — 7 días',
+    items: [
+      { ref:'Josué 24:14-15', desc:'Yo y mi casa serviremos a Jehová.', done:false, today:true },
+      { ref:'Deuteronomio 6:4-9', desc:'Repetirás estas palabras a tus hijos en todo momento.', done:false, today:false },
+      { ref:'Efesios 5:21-33', desc:'Maridos, amad a vuestras mujeres como Cristo amó a la iglesia.', done:false, today:false },
+      { ref:'Efesios 6:1-4', desc:'Hijos, obedeced a vuestros padres; padres, no provoquéis a ira.', done:false, today:false },
+      { ref:'Proverbios 22:6', desc:'Instruye al niño en su camino.', done:false, today:false },
+      { ref:'Salmo 127', desc:'Si Jehová no edificare la casa, en vano trabajan los que la edifican.', done:false, today:false },
+      { ref:'Colosenses 3:18-21', desc:'Instrucciones para la vida en el hogar.', done:false, today:false },
+    ],
+  },
+  identidad: {
+    name: 'Identidad', desc: 'Quién dice Dios que eres — 7 días',
+    items: [
+      { ref:'Salmo 139:13-18', desc:'Formidables y maravillosas son tus obras: fui hecho por ti.', done:false, today:true },
+      { ref:'Efesios 1:3-14', desc:'Escogidos en él antes de la fundación del mundo.', done:false, today:false },
+      { ref:'Juan 1:12', desc:'A todos los que le recibieron, les dio potestad de ser hijos de Dios.', done:false, today:false },
+      { ref:'2 Corintios 5:17', desc:'Si alguno está en Cristo, nueva criatura es.', done:false, today:false },
+      { ref:'1 Pedro 2:9-10', desc:'Vosotros sois linaje escogido, real sacerdocio, nación santa.', done:false, today:false },
+      { ref:'Romanos 8:31-39', desc:'Nada podrá separarnos del amor de Dios.', done:false, today:false },
+      { ref:'Gálatas 2:20', desc:'Ya no vivo yo, mas vive Cristo en mí.', done:false, today:false },
+    ],
+  },
+  proposito: {
+    name: 'Propósito', desc: 'Para qué estás aquí — 7 días',
+    items: [
+      { ref:'Jeremías 29:11-13', desc:'Pensamientos de paz y no de mal, para daros el fin que esperáis.', done:false, today:true },
+      { ref:'Efesios 2:8-10', desc:'Somos hechura suya, creados para buenas obras.', done:false, today:false },
+      { ref:'Jeremías 1:4-10', desc:'Antes que te formase en el vientre te conocí.', done:false, today:false },
+      { ref:'Proverbios 16:1-9', desc:'El hombre propone su camino, mas Jehová endereza sus pasos.', done:false, today:false },
+      { ref:'Romanos 12:1-8', desc:'Presentad vuestros cuerpos en sacrificio vivo; dones diferentes.', done:false, today:false },
+      { ref:'Ester 4:12-17', desc:'¿Quién sabe si para esta hora has llegado al reino?', done:false, today:false },
+      { ref:'Eclesiastés 3:1-14', desc:'Todo tiene su tiempo bajo el cielo.', done:false, today:false },
+    ],
+  },
+  generosidad: {
+    name: 'Generosidad', desc: 'Manos abiertas, corazón alegre — 7 días',
+    items: [
+      { ref:'2 Corintios 9:6-15', desc:'Dios ama al dador alegre.', done:false, today:true },
+      { ref:'Malaquías 3:10', desc:'Traed todos los diezmos al alfolí; probadme en esto.', done:false, today:false },
+      { ref:'Proverbios 11:24-25', desc:'El alma generosa será prosperada.', done:false, today:false },
+      { ref:'Lucas 21:1-4', desc:'La ofrenda de la viuda: dio todo lo que tenía.', done:false, today:false },
+      { ref:'Hechos 4:32-37', desc:'Ninguno decía ser suyo propio nada de lo que poseía.', done:false, today:false },
+      { ref:'Mateo 6:19-24', desc:'Haceos tesoros en el cielo; no podéis servir a Dios y a las riquezas.', done:false, today:false },
+      { ref:'1 Timoteo 6:17-19', desc:'Que sean ricos en buenas obras, dadivosos, generosos.', done:false, today:false },
+    ],
+  },
+  salvacion: {
+    name: 'Salvación', desc: 'El camino de vuelta a Dios — 7 días',
+    items: [
+      { ref:'Romanos 3:21-26', desc:'Todos pecaron, pero son justificados gratuitamente por su gracia.', done:false, today:true },
+      { ref:'Efesios 2:1-9', desc:'Por gracia sois salvos por medio de la fe; no por obras.', done:false, today:false },
+      { ref:'Juan 3:16-21', desc:'De tal manera amó Dios al mundo.', done:false, today:false },
+      { ref:'Romanos 10:8-13', desc:'Si confesares con tu boca y creyeres en tu corazón, serás salvo.', done:false, today:false },
+      { ref:'Hechos 4:8-12', desc:'En ningún otro hay salvación.', done:false, today:false },
+      { ref:'Tito 3:3-7', desc:'Nos salvó por su misericordia, no por obras de justicia.', done:false, today:false },
+      { ref:'1 Juan 5:11-13', desc:'Estas cosas os he escrito para que sepáis que tenéis vida eterna.', done:false, today:false },
+    ],
+  },
+  resurrecion: {
+    name: 'Resurrección', desc: 'La esperanza que cambia todo — 7 días',
+    items: [
+      { ref:'Lucas 24:1-12', desc:'¿Por qué buscáis entre los muertos al que vive?', done:false, today:true },
+      { ref:'Juan 20:1-18', desc:'María Magdalena reconoce al Resucitado.', done:false, today:false },
+      { ref:'Juan 20:24-29', desc:'Tomás: bienaventurados los que no vieron y creyeron.', done:false, today:false },
+      { ref:'1 Corintios 15:1-11', desc:'Cristo murió, fue sepultado y resucitó al tercer día.', done:false, today:false },
+      { ref:'1 Corintios 15:50-58', desc:'¿Dónde está, oh muerte, tu aguijón?', done:false, today:false },
+      { ref:'Romanos 6:1-11', desc:'Sepultados con él para andar en vida nueva.', done:false, today:false },
+      { ref:'1 Pedro 1:3-9', desc:'Nos hizo renacer para una esperanza viva.', done:false, today:false },
+    ],
+  },
+  mision: {
+    name: 'Misión', desc: 'Id y haced discípulos — 7 días',
+    items: [
+      { ref:'Mateo 28:16-20', desc:'La Gran Comisión: id y haced discípulos a todas las naciones.', done:false, today:true },
+      { ref:'Hechos 1:8', desc:'Me seréis testigos hasta lo último de la tierra.', done:false, today:false },
+      { ref:'Romanos 10:11-15', desc:'¿Cómo oirán sin haber quién les predique?', done:false, today:false },
+      { ref:'Isaías 6:1-8', desc:'Heme aquí, envíame a mí.', done:false, today:false },
+      { ref:'Mateo 5:13-16', desc:'Vosotros sois la sal de la tierra y la luz del mundo.', done:false, today:false },
+      { ref:'Hechos 8:26-40', desc:'Felipe y el etíope: explicando las Escrituras.', done:false, today:false },
+      { ref:'Apocalipsis 7:9-12', desc:'Una multitud de todas naciones, tribus, pueblos y lenguas.', done:false, today:false },
     ],
   },
   fe: {
