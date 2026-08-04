@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" conthent="MenteClara">
+<meta name="apple-mobile-web-app-title" content="MenteClara">
 <meta name="description" content="Tu espacio de oración, devoción y bienestar espiritual">
 <meta property="og:type" content="website">
 <meta property="og:title" content="MenteClara — Oración y Devoción">
@@ -25,7 +25,7 @@
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').catch(err => console.error('Error al registrar el service worker:', err));
   });
 }
 </script>
@@ -33,7 +33,7 @@ if ('serviceWorker' in navigator) {
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, sendPasswordResetEmail, onAuthStateChanged, deleteUser, EmailAuthProvider, reauthenticateWithCredential, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { getFirestore, collection, addDoc, getDocs, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -48,6 +48,9 @@ const firebaseConfig = {
 try {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
+  // La sesión se queda activa hasta que el usuario cierre sesión manualmente.
+  // Sobrevive cerrar la app, el navegador, o reiniciar el teléfono.
+  setPersistence(auth, browserLocalPersistence).catch(() => {});
   const db = getFirestore(app);
 
   onAuthStateChanged(auth, user => {
@@ -74,6 +77,26 @@ try {
 
   window.fbLogout = async () => {
     try { await signOut(auth); } catch(e) {}
+  };
+
+  window.fbResetPassword = async (email) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      return { ok: true };
+    } catch(e) { return { error: e.code }; }
+  };
+
+  window.fbDeleteAccount = async (password) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return { error: 'no-user' };
+      if (password) {
+        const cred = EmailAuthProvider.credential(user.email, password);
+        await reauthenticateWithCredential(user, cred);
+      }
+      await deleteUser(user);
+      return { ok: true };
+    } catch(e) { return { error: e.code }; }
   };
 
   window.saveFirebasePost = async (text) => {
@@ -114,7 +137,7 @@ try {
   console.log('Firebase conectado');
 } catch(e) {
   console.warn('Firebase error:', e.message);
-  window.fbLogin = null; window.fbRegister = null; window.fbLogout = null;
+  window.fbLogin = null; window.fbRegister = null; window.fbLogout = null; window.fbResetPassword = null; window.fbDeleteAccount = null;
   window.saveFirebasePost = null; window.loadFirebasePosts = null;
 }
 </script>
@@ -365,6 +388,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button onclick="togglePassVisibility('login-pass',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
     </div>
     <button class="btn-primary" onclick="doLogin()" id="btn-login">Entrar</button>
+    <div style="text-align:center;margin-top:6px">
+      <a href="#" onclick="doPasswordReset();return false;" id="link-forgot-pass" style="font-size:12px;color:var(--text-dim);text-decoration:underline">¿Olvidaste tu contraseña?</a>
+    </div>
     <button class="btn-ghost" onclick="showScreen('register')" id="btn-go-register">Crear cuenta nueva</button>
     <div class="security-note">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -559,8 +585,6 @@ const Security = {
   loginAttempts: 0,
   maxAttempts: 5,
   lockoutTime: null,
-  sessionStart: Date.now(),
-  sessionTimeout: 60 * 60 * 1000, // 60 min
   
   validateEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -604,14 +628,6 @@ const Security = {
     this.lockoutTime = null;
   },
   
-  checkSession() {
-    if (Date.now() - this.sessionStart > this.sessionTimeout) {
-      doLogout();
-      return false;
-    }
-    return true;
-  },
-  
   generateAnonId() {
     return 'usr_' + Math.random().toString(36).slice(2, 10);
   },
@@ -622,19 +638,6 @@ const Security = {
     return blocked.some(w => lower.includes(w));
   }
 };
-
-// Session check every 5 min
-setInterval(() => {
-  if (document.getElementById('main-app').style.display !== 'none') {
-    const remaining = Security.sessionTimeout - (Date.now() - Security.sessionStart);
-    if (remaining < 5 * 60 * 1000 && remaining > 0) {
-      const bar = document.getElementById('session-bar');
-      bar.style.display = 'block';
-      bar.textContent = getText('session_warning').replace('{min}', Math.ceil(remaining / 60000));
-    }
-    if (!Security.checkSession()) doLogout();
-  }
-}, 60000);
 
 // ═══════════════════════════════════════
 // TRANSLATIONS
@@ -1038,7 +1041,6 @@ function enterAppAfterRegister() {
   const email = document.getElementById('reg-email').value.trim();
   const fbUser = window._fbUser;
   currentUser = { email, name: email.split('@')[0], anonId: fbUser ? fbUser.uid.slice(0,8) : Security.generateAnonId(), firebase: true };
-  Security.sessionStart = Date.now();
   document.getElementById('main-app').style.display = 'flex';
   document.getElementById('screen-verify').classList.add('hidden');
   document.getElementById('screen-login').classList.add('hidden');
@@ -1057,7 +1059,6 @@ window.restoreSessionFromFirebase = function(fbUser) {
     anonId: fbUser.uid ? fbUser.uid.slice(0,8) : Security.generateAnonId(),
     firebase: true
   };
-  Security.sessionStart = Date.now();
   mainApp.style.display = 'flex';
   ['login','register','verify'].forEach(s => {
     const el = document.getElementById('screen-' + s);
@@ -1149,8 +1150,7 @@ async function doLogin() {
       Security.resetAttempts();
       const fbUser = result.user || window._fbUser;
       currentUser = { email, name: email.split('@')[0], anonId: fbUser ? fbUser.uid.slice(0,8) : Security.generateAnonId(), firebase: true };
-      Security.sessionStart = Date.now();
-      document.getElementById('main-app').style.display = 'flex';
+          document.getElementById('main-app').style.display = 'flex';
       document.getElementById('screen-login').classList.add('hidden');
       showTab('home', document.getElementById('nav-home'));
       btn.textContent = 'Entrar'; btn.disabled = false;
@@ -1169,12 +1169,44 @@ async function doLogin() {
   if (Security.validateEmail(email) && pass.length >= 8) {
     Security.resetAttempts();
     currentUser = { email, name: email.split('@')[0], anonId: Security.generateAnonId(), firebase: false };
-    Security.sessionStart = Date.now();
-    document.getElementById('main-app').style.display = 'flex';
+      document.getElementById('main-app').style.display = 'flex';
     document.getElementById('screen-login').classList.add('hidden');
     showTab('home', document.getElementById('nav-home'));
   } else {
     showError('login-error', pass.length < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : getText('login_error'));
+  }
+}
+
+async function doPasswordReset() {
+  const emailInput = document.getElementById('login-email');
+  let email = emailInput.value.trim();
+  if (!email) {
+    email = (prompt('Escribe tu correo electrónico para recuperar tu contraseña:') || '').trim();
+    if (!email) return;
+  }
+  if (!Security.validateEmail(email)) {
+    showError('login-error', 'Escribe un correo electrónico válido.');
+    return;
+  }
+  const link = document.getElementById('link-forgot-pass');
+  const originalText = link.textContent;
+  link.textContent = 'Enviando...';
+
+  if (window.fbResetPassword) {
+    const result = await window.fbResetPassword(email);
+    link.textContent = originalText;
+    const el = document.getElementById('login-error');
+    if (result.ok) {
+      el.style.color = '#4ade80';
+      el.textContent = 'Te enviamos un enlace para restablecer tu contraseña a ' + email + '. Revisa tu correo.';
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; el.style.color = ''; }, 6000);
+    } else {
+      showError('login-error', result.error === 'auth/user-not-found' ? 'No encontramos una cuenta con ese correo.' : 'No se pudo enviar el correo. Intenta de nuevo.');
+    }
+  } else {
+    link.textContent = originalText;
+    showError('login-error', 'Servicio no disponible en este momento.');
   }
 }
 
@@ -1617,7 +1649,61 @@ function renderHome() {
   <div style="text-align:center;margin-top:8px">
     <button onclick="doLogout()" style="background:none;border:none;color:var(--text-dim);font-size:12px;cursor:pointer">Cerrar sesión</button>
   </div>
+  <div style="text-align:center;margin-top:4px">
+    <button onclick="openDeleteAccount()" style="background:none;border:none;color:#c0392b;font-size:11px;cursor:pointer;opacity:0.7">Eliminar cuenta</button>
+  </div>
   `;
+}
+
+function openDeleteAccount() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">⚠️ Eliminar cuenta</div>
+  <div class="card" style="margin-bottom:14px;border-color:#c0392b">
+    <div style="font-size:12px;color:var(--text-dim);line-height:1.6">
+      Esta acción es <b>permanente</b> y no se puede deshacer. Al eliminar tu cuenta:<br><br>
+      <ul style="margin:0 0 0 16px;padding:0">
+        <li>Perderás acceso a tu cuenta de inmediato</li>
+        <li>Tu diario, versículos guardados y racha de oración se pierden</li>
+        <li>Las publicaciones que hayas hecho en la comunidad pueden permanecer visibles de forma anónima, ya que hoy no se pueden borrar de forma individual</li>
+      </ul><br>
+      Si solo quieres tomarte un descanso, usa "Cerrar sesión" en vez de esto. Si prefieres pedirlo por correo, escribe a <b>eliminaciondecuentas@tutamail.com</b>.
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <label class="field-label" id="lbl-delete-pass">Confirma tu contraseña para continuar</label>
+    <input class="field-input" type="password" id="delete-account-pass" placeholder="••••••••">
+    <div class="error-msg" id="delete-account-error"></div>
+  </div>
+  <button class="btn-primary" id="btn-delete-account" style="background:#c0392b" onclick="confirmDeleteAccount()">Eliminar mi cuenta permanentemente</button>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Cancelar</button>`;
+}
+
+async function confirmDeleteAccount() {
+  const pass = document.getElementById('delete-account-pass').value;
+  if (!pass) { showError('delete-account-error', 'Escribe tu contraseña para confirmar.'); return; }
+
+  const btn = document.getElementById('btn-delete-account');
+  btn.textContent = 'Eliminando...';
+  btn.disabled = true;
+
+  if (window.fbDeleteAccount) {
+    const result = await window.fbDeleteAccount(pass);
+    if (result.ok) {
+      currentUser = null;
+      document.getElementById('main-app').style.display = 'none';
+      document.getElementById('screen-login').classList.remove('hidden');
+      alert('Tu cuenta fue eliminada. Gracias por haber sido parte de MenteClara.');
+      return;
+    }
+    btn.textContent = 'Eliminar mi cuenta permanentemente';
+    btn.disabled = false;
+    showError('delete-account-error', result.error === 'auth/wrong-password' || result.error === 'auth/invalid-credential' ? 'Contraseña incorrecta.' : 'No se pudo eliminar la cuenta. Intenta de nuevo.');
+  } else {
+    btn.textContent = 'Eliminar mi cuenta permanentemente';
+    btn.disabled = false;
+    showError('delete-account-error', 'Servicio no disponible en este momento.');
+  }
 }
 
 function renderComunidad() {
