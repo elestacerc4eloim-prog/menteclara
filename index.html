@@ -475,11 +475,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span id="nav-lbl-com">Comunidad</span>
     </button>
-    <button class="nav-btn" onclick="showTab('pueblos',this)" id="nav-pueblos">
+    <!-- Pueblos y Planes ocultos temporalmente: renderPueblos()/renderPlanes() dependen de datos (pueblos, readingPlans, activePlan) que aún no existen. Los botones y sus <span> se dejan en el DOM (ocultos con display:none) para no romper el cambio de idioma, que sí busca estos IDs. -->
+    <button class="nav-btn" onclick="showTab('pueblos',this)" id="nav-pueblos" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
       <span id="nav-lbl-pue">Pueblos</span>
     </button>
-    <button class="nav-btn" onclick="showTab('planes',this)" id="nav-planes">
+    <button class="nav-btn" onclick="showTab('planes',this)" id="nav-planes" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       <span id="nav-lbl-plan">Planes</span>
     </button>
@@ -2613,6 +2614,7 @@ const ayunoTipos = [
   { id:'daniel', name:'Ayuno de Daniel', desc:'Solo frutas, vegetales y agua' },
   { id:'medios', name:'Ayuno de medios', desc:'Sin redes sociales ni entretenimiento' },
 ];
+const AYUNO_MAX_HORAS = 15;
 function saveAyunoState() { localStorage.setItem('mc_ayuno', JSON.stringify(ayunoState)); }
 function startAyuno(tipoId) {
   ayunoState = { active:true, type:tipoId, startDate: new Date().toISOString() };
@@ -2628,26 +2630,85 @@ function openAyuno() {
   const content = document.getElementById('main-content');
   if (ayunoState.active) {
     const tipo = ayunoTipos.find(t => t.id === ayunoState.type) || ayunoTipos[0];
-    const dias = Math.floor((Date.now() - new Date(ayunoState.startDate).getTime()) / 86400000);
+    const horas = (Date.now() - new Date(ayunoState.startDate).getTime()) / 3600000;
+
+    if (horas >= AYUNO_MAX_HORAS) {
+      endAyuno();
+      content.innerHTML = `
+      <div class="section-label">✅ Ayuno completado</div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="font-weight:600;font-size:15px;color:var(--text)">${tipo.name}</div>
+        <div class="card-sub">Llegaste al máximo de ${AYUNO_MAX_HORAS} horas que permite la app por tu seguridad, y se terminó automáticamente.</div>
+      </div>
+      <div class="card" style="border-color:#e0a03d">
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.5">Si sientes debilidad, mareo, palpitaciones o cualquier síntoma que te preocupe, no lo ignores — busca atención médica. Un ayuno espiritual nunca vale más que tu salud.</div>
+      </div>
+      <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:12px">← Volver</button>`;
+      return;
+    }
+
+    const restantes = Math.max(0, AYUNO_MAX_HORAS - horas);
+    const pct = Math.min(100, Math.round((horas / AYUNO_MAX_HORAS) * 100));
     content.innerHTML = `
     <div class="section-label">🕊 Ayuno en progreso</div>
     <div class="card" style="margin-bottom:12px">
       <div style="font-weight:600;font-size:15px;color:var(--text)">${tipo.name}</div>
       <div class="card-sub">${tipo.desc}</div>
-      <div style="margin-top:10px;font-size:13px;color:var(--gold)">Día ${dias + 1}</div>
+      <div style="margin-top:10px;font-size:13px;color:var(--gold)">${horas.toFixed(1)} de ${AYUNO_MAX_HORAS} horas máximo</div>
+      <div style="background:var(--border);border-radius:6px;height:6px;margin-top:8px;overflow:hidden">
+        <div style="background:var(--gold);height:100%;width:${pct}%"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Se terminará automáticamente en ${restantes.toFixed(1)} horas por tu seguridad.</div>
     </div>
-    <button class="btn-primary" onclick="endAyuno()">Terminar ayuno</button>
+    <div class="card" style="margin-bottom:14px;border-color:#e0a03d">
+      <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:6px">⚠️ ¿Cómo te sientes?</div>
+      <div style="font-size:12px;color:var(--text-dim)">Si tienes mareo, debilidad fuerte, dolor de cabeza intenso, palpitaciones o confusión, termina el ayuno ahora y busca atención médica. MenteClara no ofrece consejo médico.</div>
+    </div>
+    <button class="btn-primary" onclick="endAyuno()" style="background:#c0392b">🛑 Terminar ayuno ahora</button>
     <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
   } else {
     content.innerHTML = `
     <div class="section-label">🕊 Tracker de ayuno</div>
+    <div class="card" style="margin-bottom:14px;border-color:#e0a03d">
+      <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:6px">⚠️ Aviso importante</div>
+      <div style="font-size:12px;color:var(--text-dim)">MenteClara no ofrece consejo médico. El ayuno puede no ser seguro para personas con ciertas condiciones de salud, embarazadas, en lactancia, menores de edad, o quienes toman medicamentos que requieren alimento regular. Por tu seguridad, todos los ayunos en la app tienen un máximo de ${AYUNO_MAX_HORAS} horas y se terminan solos al llegar a ese límite.</div>
+    </div>
     <div class="card-sub" style="margin-bottom:14px">Elige el tipo de ayuno que deseas comenzar.</div>
     ${ayunoTipos.map(t => `
-    <div class="mod-card" onclick="startAyuno('${t.id}')">
+    <div class="mod-card" onclick="openAyunoQuestionnaire('${t.id}')">
       <div class="mod-info"><div class="mod-name">${t.name}</div><div class="mod-desc">${t.desc}</div></div>
     </div>`).join('')}
     <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
   }
+}
+
+function openAyunoQuestionnaire(tipoId) {
+  const tipo = ayunoTipos.find(t => t.id === tipoId) || ayunoTipos[0];
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">Antes de comenzar: ${tipo.name}</div>
+  <div class="card" style="margin-bottom:14px;border-color:#e0a03d">
+    <div style="font-size:12px;color:var(--text-dim);line-height:1.6">
+      MenteClara no es una app médica y esta información no sustituye el consejo de un profesional de la salud.<br><br>
+      <b>Consulta a un médico antes de ayunar si:</b>
+      <ul style="margin:6px 0 0 16px;padding:0">
+        <li>Tienes una condición médica (diabetes, problemas cardíacos, presión arterial, trastornos alimenticios, etc.)</li>
+        <li>Estás embarazada o en lactancia</li>
+        <li>Eres menor de 18 años</li>
+        <li>Tomas medicamentos que requieren alimento regular</li>
+      </ul><br>
+      Si sientes mareo, debilidad severa, palpitaciones o confusión durante el ayuno, termínalo de inmediato y busca atención médica.<br><br>
+      Por tu seguridad, este ayuno se limitará automáticamente a un máximo de <b>${AYUNO_MAX_HORAS} horas</b>.
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--text);cursor:pointer">
+      <input type="checkbox" id="ayuno-consent-check" onchange="const b=document.getElementById('ayuno-start-btn');b.disabled=!this.checked;b.style.opacity=this.checked?'1':'0.4';">
+      <span>He leído esta información y decido comenzar este ayuno bajo mi propia responsabilidad. Entiendo que MenteClara no ofrece consejo médico.</span>
+    </label>
+  </div>
+  <button class="btn-primary" id="ayuno-start-btn" disabled style="opacity:0.4" onclick="startAyuno('${tipoId}')">Comenzar ayuno</button>
+  <button class="btn-ghost" onclick="openAyuno()" style="margin-top:8px">← Cancelar</button>`;
 }
 
 // ═══════════════════════════════════════
