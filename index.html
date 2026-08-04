@@ -501,12 +501,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span id="nav-lbl-com">Comunidad</span>
     </button>
-    <!-- Pueblos y Planes ocultos temporalmente: renderPueblos()/renderPlanes() dependen de datos (pueblos, readingPlans, activePlan) que aún no existen. Los botones y sus <span> se dejan en el DOM (ocultos con display:none) para no romper el cambio de idioma, que sí busca estos IDs. -->
-    <button class="nav-btn" onclick="showTab('pueblos',this)" id="nav-pueblos" style="display:none">
+    <!-- Pueblos y Planes: ya tienen datos reales (pueblos array + 5 planes de lectura). Los 15 temas restantes de "categories" quedan sin chip hasta que se les agregue contenido — renderPlanes() los filtra automáticamente. -->
+    <button class="nav-btn" onclick="showTab('pueblos',this)" id="nav-pueblos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
       <span id="nav-lbl-pue">Pueblos</span>
     </button>
-    <button class="nav-btn" onclick="showTab('planes',this)" id="nav-planes" style="display:none">
+    <button class="nav-btn" onclick="showTab('planes',this)" id="nav-planes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       <span id="nav-lbl-plan">Planes</span>
     </button>
@@ -1735,6 +1735,19 @@ function renderComunidad() {
   ${posts}`;
 }
 
+const pueblos = [
+  { name:'Pueblo Uigur', country:'China', pop:'aprox. 12 millones', religion:'Islam', verse:'"Porque de tal manera amó Dios al mundo, que ha dado a su Hijo unigénito, para que todo aquel que en él cree no se pierda, mas tenga vida eterna." — Juan 3:16', praying:214 },
+  { name:'Pueblo Pastún', country:'Afganistán y Pakistán', pop:'aprox. 50 millones', religion:'Islam', verse:'"Toda la Escritura es inspirada por Dios y útil para enseñar." — 2 Timoteo 3:16', praying:189 },
+  { name:'Pueblo Rohingya', country:'Myanmar y Bangladés', pop:'aprox. 3.5 millones', religion:'Islam', verse:'"Cercano está Jehová a los quebrantados de corazón, y salva a los contritos de espíritu." — Salmo 34:18', praying:301 },
+  { name:'Pueblo Kurdo', country:'Turquía, Irak, Irán y Siria', pop:'aprox. 30 millones', religion:'Islam', verse:'"El Espíritu del Señor está sobre mí... me ha enviado a sanar a los quebrantados de corazón." — Lucas 4:18', praying:176 },
+  { name:'Pueblo Somalí', country:'Somalia', pop:'aprox. 17 millones', religion:'Islam', verse:'"No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios." — Isaías 41:10', praying:243 },
+  { name:'Pueblo Hausa', country:'Nigeria y Níger', pop:'aprox. 80 millones', religion:'Islam', verse:'"Id por todo el mundo y predicad el evangelio a toda criatura." — Marcos 16:15', praying:167 },
+  { name:'Pueblo Balochi', country:'Pakistán, Irán y Afganistán', pop:'aprox. 9 millones', religion:'Islam', verse:'"¿Y cómo predicarán si no fueren enviados?" — Romanos 10:15', praying:98 },
+  { name:'Pueblo Uzbeko', country:'Uzbekistán', pop:'aprox. 30 millones', religion:'Islam', verse:'"He aquí que yo estoy con vosotros todos los días, hasta el fin del mundo." — Mateo 28:20', praying:132 },
+  { name:'Pueblo Wolof', country:'Senegal', pop:'aprox. 6 millones', religion:'Islam', verse:'"Dios amó tanto al mundo que dio a su Hijo unigénito." — Juan 3:16', praying:87 },
+  { name:'Pueblo Japonés', country:'Japón', pop:'aprox. 123 millones', religion:'Budismo y sintoísmo', verse:'"Porque somos hechura suya, creados en Cristo Jesús para buenas obras." — Efesios 2:10', praying:154 },
+];
+
 function renderPueblos() {
   const p = pueblos[Math.floor(Date.now() / 86400000) % pueblos.length];
   return `
@@ -1753,6 +1766,70 @@ function renderPueblos() {
     <div class="card-sub">El 97% de los pueblos no alcanzados vive en esta región. Más de 7,400 grupos esperan el evangelio. Tu oración importa.</div>
   </div>`;
 }
+
+const readingPlans = {
+  proverbios: {
+    name: 'Proverbios', desc: 'Sabiduría práctica para la vida diaria — 7 días',
+    items: [
+      { ref:'Proverbios 1:1-7', desc:'El temor de Jehová es el principio de la sabiduría.', done:false, today:true },
+      { ref:'Proverbios 3:5-6', desc:'Confía en Jehová de todo tu corazón, y no te apoyes en tu propia prudencia.', done:false, today:false },
+      { ref:'Proverbios 4:23', desc:'Sobre toda cosa guardada, guarda tu corazón, porque de él mana la vida.', done:false, today:false },
+      { ref:'Proverbios 10:19', desc:'En las muchas palabras no falta pecado; el que refrena sus labios es prudente.', done:false, today:false },
+      { ref:'Proverbios 16:3', desc:'Encomienda a Jehová tus obras, y tus pensamientos serán afirmados.', done:false, today:false },
+      { ref:'Proverbios 22:6', desc:'Instruye al niño en su camino, y aun cuando fuere viejo no se apartará de él.', done:false, today:false },
+      { ref:'Proverbios 27:1', desc:'No te jactes del día de mañana; porque no sabes qué dará de sí el día.', done:false, today:false },
+    ],
+  },
+  salmos_consuelo: {
+    name: 'Salmos de consuelo', desc: 'Para los días difíciles — 7 días',
+    items: [
+      { ref:'Salmo 23', desc:'Jehová es mi pastor; nada me faltará.', done:false, today:true },
+      { ref:'Salmo 27:1', desc:'Jehová es mi luz y mi salvación; ¿de quién temeré?', done:false, today:false },
+      { ref:'Salmo 34:18', desc:'Cercano está Jehová a los quebrantados de corazón.', done:false, today:false },
+      { ref:'Salmo 46:1', desc:'Dios es nuestro amparo y fortaleza, nuestro pronto auxilio en las tribulaciones.', done:false, today:false },
+      { ref:'Salmo 91:1-2', desc:'El que habita al abrigo del Altísimo morará bajo la sombra del Omnipotente.', done:false, today:false },
+      { ref:'Salmo 121', desc:'Alzaré mis ojos a los montes; ¿de dónde vendrá mi socorro?', done:false, today:false },
+      { ref:'Salmo 147:3', desc:'Él sana a los quebrantados de corazón, y venda sus heridas.', done:false, today:false },
+    ],
+  },
+  ansiedad: {
+    name: 'Ansiedad', desc: 'Descanso para un corazón inquieto — 7 días',
+    items: [
+      { ref:'Mateo 6:25-27', desc:'No os afanéis por vuestra vida... ¿no vale más vosotros que ellas?', done:false, today:true },
+      { ref:'Filipenses 4:6-7', desc:'Por nada estéis afanosos; la paz de Dios guardará vuestros corazones.', done:false, today:false },
+      { ref:'1 Pedro 5:7', desc:'Echad toda vuestra ansiedad sobre él, porque él tiene cuidado de vosotros.', done:false, today:false },
+      { ref:'Juan 14:27', desc:'La paz os dejo, mi paz os doy... No se turbe vuestro corazón, ni tenga miedo.', done:false, today:false },
+      { ref:'Isaías 41:10', desc:'No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios.', done:false, today:false },
+      { ref:'Salmo 55:22', desc:'Echa sobre Jehová tu carga, y él te sustentará.', done:false, today:false },
+      { ref:'2 Timoteo 1:7', desc:'No nos ha dado Dios espíritu de cobardía, sino de poder, de amor y de dominio propio.', done:false, today:false },
+    ],
+  },
+  perdon: {
+    name: 'Perdón', desc: 'Sanando lo que otros rompieron — 7 días',
+    items: [
+      { ref:'Mateo 6:14-15', desc:'Si perdonáis a los hombres sus ofensas, os perdonará también vuestro Padre celestial.', done:false, today:true },
+      { ref:'Efesios 4:31-32', desc:'Sed benignos unos con otros, misericordiosos, perdonándoos unos a otros.', done:false, today:false },
+      { ref:'Colosenses 3:13', desc:'De la manera que Cristo os perdonó, así también hacedlo vosotros.', done:false, today:false },
+      { ref:'Mateo 18:21-22', desc:'¿Cuántas veces perdonaré? Hasta setenta veces siete.', done:false, today:false },
+      { ref:'Lucas 23:34', desc:'Padre, perdónalos, porque no saben lo que hacen.', done:false, today:false },
+      { ref:'Salmo 103:12', desc:'Cuanto está lejos el oriente del occidente, hizo alejar de nosotros nuestras rebeliones.', done:false, today:false },
+      { ref:'Marcos 11:25', desc:'Perdonad, si tenéis algo contra alguno, para que vuestro Padre os perdone.', done:false, today:false },
+    ],
+  },
+  fe: {
+    name: 'Fe', desc: 'Caminar por fe y no por vista — 7 días',
+    items: [
+      { ref:'Hebreos 11:1', desc:'La fe es la certeza de lo que se espera, la convicción de lo que no se ve.', done:false, today:true },
+      { ref:'Romanos 10:17', desc:'Así que la fe es por el oír, y el oír, por la palabra de Dios.', done:false, today:false },
+      { ref:'Marcos 11:22-24', desc:'Tened fe en Dios... todo lo que pidiereis orando, creed que lo recibiréis.', done:false, today:false },
+      { ref:'Santiago 1:2-4', desc:'Tened por sumo gozo cuando os halléis en diversas pruebas.', done:false, today:false },
+      { ref:'2 Corintios 5:7', desc:'Porque por fe andamos, no por vista.', done:false, today:false },
+      { ref:'Mateo 17:20', desc:'Si tuviereis fe como un grano de mostaza... nada os será imposible.', done:false, today:false },
+      { ref:'Hebreos 11:6', desc:'Sin fe es imposible agradar a Dios.', done:false, today:false },
+    ],
+  },
+};
+let activePlan = 'proverbios';
 
 function renderPlanes() {
   const plan = readingPlans[activePlan];
@@ -1788,7 +1865,10 @@ function renderPlanes() {
     </div>
   </div>`).join('');
 
-  let catHTML = Object.entries(categories).map(([cat, keys]) => `
+  let catHTML = Object.entries(categories)
+    .map(([cat, keys]) => [cat, keys.filter(k => readingPlans[k])])
+    .filter(([cat, keys]) => keys.length > 0)
+    .map(([cat, keys]) => `
   <div style="margin-bottom:8px">
     <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">${cat}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
