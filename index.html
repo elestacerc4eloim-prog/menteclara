@@ -34,7 +34,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, sendPasswordResetEmail, onAuthStateChanged, deleteUser, EmailAuthProvider, reauthenticateWithCredential, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, collection, addDoc, getDocs, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, getDocs, getDoc, serverTimestamp, query, orderBy, limit, doc, updateDoc, increment, setDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAH_DqIXCpuuVeJJ-H1smLKJMeLz-4hi-s",
@@ -118,20 +118,43 @@ try {
     } catch(e) { return null; }
   };
 
-    window.prayFirebase = async (postId) => {
-          if (!auth.currentUser) return false;
-          try {
-                  const markRef = doc(db, 'posts', postId, 'prayedBy', auth.currentUser.uid);
-                  await setDoc(markRef, { at: serverTimestamp() });
-                  await updateDoc(doc(db,'posts',postId), { praying: increment(1) });
-                  return true;
-          } catch(e) {
-                  return false;
-          }
-    };
+  window.prayFirebase = async (postId) => {
+    if (!auth.currentUser) return { error: 'no-auth' };
+    try {
+      const markRef = doc(db, 'posts', postId, 'prayedBy', auth.currentUser.uid);
+      const existing = await getDoc(markRef);
+      if (existing.exists()) return { already: true };
+      // Las reglas exigen que la marca y el incremento ocurran en la misma operación
+      // (getAfter), así que van juntos en un batch atómico.
+      const batch = writeBatch(db);
+      batch.set(markRef, { at: serverTimestamp() });
+      batch.update(doc(db, 'posts', postId), { praying: increment(1) });
+      await batch.commit();
+      return { ok: true };
+    } catch(e) {
+      return { error: e.code || 'unknown' };
+    }
+  };
+
+  window.hasPrayedFor = async (postId) => {
+    if (!auth.currentUser) return false;
+    try {
+      const markRef = doc(db, 'posts', postId, 'prayedBy', auth.currentUser.uid);
+      const snap = await getDoc(markRef);
+      return snap.exists();
+    } catch(e) { return false; }
+  };
 
   window.reportFirebase = async (postId) => {
-    try { await updateDoc(doc(db,'posts',postId), { reported: true }); } catch(e) {}
+    if (!auth.currentUser) return { error: 'no-auth' };
+    try {
+      const markRef = doc(db, 'posts', postId, 'reportedBy', auth.currentUser.uid);
+      const batch = writeBatch(db);
+      batch.set(markRef, { at: serverTimestamp() });
+      batch.update(doc(db, 'posts', postId), { reported: true });
+      await batch.commit();
+      return { ok: true };
+    } catch(e) { return { error: e.code || 'unknown' }; }
   };
 
   console.log('Firebase conectado');
@@ -1707,18 +1730,8 @@ async function confirmDeleteAccount() {
 }
 
 function renderComunidad() {
-  let posts = communityPosts.map((p, i) => `
-  <div class="post-card">
-    <div class="post-header">
-      <span class="post-user">${escapeHtml(p.anon)}</span>
-      <span class="post-time">${escapeHtml(p.time)}</span>
-    </div>
-    <div class="post-text">${escapeHtml(p.text)}</div>
-    <div class="post-footer">
-      <button class="pray-btn" onclick="togglePray(${i},this)">🙏 <span>${p.praying} ${getText('praying')}</span></button>
-      <button class="report-btn" onclick="openReport(${i})">⚑</button>
-    </div>
-  </div>`).join('');
+  // Dispara la carga real desde Firestore; mientras tanto se muestra el placeholder de abajo.
+  loadCommunityPosts();
   return `
   <div class="section-label">${getText('com_title')}</div>
   <div class="post-input-area">
@@ -1732,7 +1745,72 @@ function renderComunidad() {
     <div class="post-rules">${getText('com_rules')}</div>
     <button class="btn-primary" onclick="submitPost()">${getText('com_btn')}</button>
   </div>
-  ${posts}`;
+  <div id="community-feed">
+    <div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">Cargando peticiones...</div>
+  </div>`;
+}
+
+function formatPostTime(createdAt) {
+  if (!createdAt || !createdAt.toDate) return 'hace un momento';
+  const diff = Date.now() - createdAt.toDate().getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `hace ${hrs} h`;
+  const dias = Math.floor(hrs / 24);
+  return dias === 1 ? 'ayer' : `hace ${dias} días`;
+}
+
+async function loadCommunityPosts() {
+  const feed = document.getElementById('community-feed');
+  if (!feed) return;
+
+  if (!window.loadFirebasePosts) {
+    feed.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudo conectar con la comunidad en este momento.</div>`;
+    return;
+  }
+
+  const posts = await window.loadFirebasePosts();
+  const feedNow = document.getElementById('community-feed');
+  if (!feedNow) return; // el usuario cambió de pestaña mientras cargaba
+
+  if (posts === null) {
+    feedNow.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudieron cargar las peticiones. Revisa tu conexión.</div>`;
+    return;
+  }
+
+  const visibles = posts.filter(p => !p.reported);
+  if (visibles.length === 0) {
+    feedNow.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:13px">Aún no hay peticiones. Sé el primero en compartir una.</div>`;
+    return;
+  }
+
+  communityPosts.length = 0;
+  visibles.forEach(p => communityPosts.push(p));
+
+  feedNow.innerHTML = visibles.map(p => `
+  <div class="post-card" id="post-${p.id}">
+    <div class="post-header">
+      <span class="post-user">${escapeHtml('Hermano ' + (p.anonId || 'anónimo'))}</span>
+      <span class="post-time">${escapeHtml(formatPostTime(p.createdAt))}</span>
+    </div>
+    <div class="post-text">${escapeHtml(p.text || '')}</div>
+    <div class="post-footer">
+      <button class="pray-btn" id="pray-${p.id}" onclick="togglePray('${p.id}',this)">🙏 <span>${p.praying || 0} ${getText('praying')}</span></button>
+      <button class="report-btn" onclick="openReport('${p.id}')">⚑</button>
+    </div>
+  </div>`).join('');
+
+  // Marca visualmente los posts por los que este usuario ya oró
+  if (window.hasPrayedFor) {
+    visibles.forEach(async p => {
+      if (await window.hasPrayedFor(p.id)) {
+        const btn = document.getElementById('pray-' + p.id);
+        if (btn) { btn.classList.add('prayed'); btn.disabled = true; }
+      }
+    });
+  }
 }
 
 const pueblos = [
@@ -1932,10 +2010,37 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-function togglePray(i, btn) {
-  communityPosts[i].praying++;
-  btn.querySelector('span').textContent = communityPosts[i].praying + ' ' + getText('praying');
-  showToast('🙏 ' + getText('praying'));
+async function togglePray(postId, btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+
+  if (!window.prayFirebase) {
+    showToast('No se pudo conectar. Intenta de nuevo.');
+    btn.disabled = false;
+    return;
+  }
+
+  const result = await window.prayFirebase(postId);
+
+  if (result.already) {
+    btn.classList.add('prayed');
+    showToast('Ya oraste por esta petición');
+    return;
+  }
+
+  if (result.ok) {
+    const span = btn.querySelector('span');
+    const actual = parseInt(span.textContent) || 0;
+    span.textContent = (actual + 1) + ' ' + getText('praying');
+    btn.classList.add('prayed');
+    showToast('🙏 ' + getText('praying'));
+    const post = communityPosts.find(p => p.id === postId);
+    if (post) post.praying = (post.praying || 0) + 1;
+    return;
+  }
+
+  btn.disabled = false;
+  showToast('No se pudo registrar tu oración. Intenta de nuevo.');
 }
 
 async function autocorrectPost() {
@@ -2001,21 +2106,22 @@ async function submitPost() {
   if (!text) { showToast(getText('post_empty')); return; }
   const clean = Security.sanitizeText(text);
   if (Security.filterContent(clean)) { showToast(getText('post_blocked')); return; }
-  // Try Firebase
-  if (window.saveFirebasePost) {
-    const ok = await window.saveFirebasePost(clean);
-    if (ok) {
-      ta.value = '';
-      showToast(getText('post_sent'));
-      setTimeout(() => showTab('comunidad', document.getElementById('nav-comunidad')), 500);
-      return;
-    }
+
+  if (!window.saveFirebasePost) {
+    showToast('No se pudo conectar. Revisa tu conexión e intenta de nuevo.');
+    return;
   }
-  // Demo fallback
-  communityPosts.unshift({ anon: 'Hermano anónimo', time: 'ahora', text: clean, praying: 0 });
-  ta.value = '';
-  showToast(getText('post_sent'));
-  setTimeout(() => showTab('comunidad', document.getElementById('nav-comunidad')), 500);
+
+  const ok = await window.saveFirebasePost(clean);
+  if (ok) {
+    ta.value = '';
+    document.getElementById('char-count').textContent = '0/300';
+    showToast(getText('post_sent'));
+    // Recarga el feed para que el usuario vea su propia petición publicada
+    setTimeout(() => loadCommunityPosts(), 600);
+  } else {
+    showToast('No se pudo publicar tu petición. Intenta de nuevo.');
+  }
 }
 
 function openReport(i) {
@@ -2025,8 +2131,14 @@ function openReport(i) {
 
 function closeModal() { document.getElementById('report-modal').classList.remove('show'); }
 
-function confirmReport() {
+async function confirmReport() {
+  const postId = document.getElementById('report-modal').dataset.postIdx;
   closeModal();
+  if (window.reportFirebase && postId) {
+    await window.reportFirebase(postId);
+    const card = document.getElementById('post-' + postId);
+    if (card) card.style.display = 'none';
+  }
   showToast(getText('reported'));
 }
 
