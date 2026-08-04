@@ -2297,20 +2297,127 @@ const RV1909_DIARIOS = [
   { ref:'Génesis 1:1 • RV1909', text:'"En el principio crió Dios los cielos y la tierra."' },
 ];
 
+
+// ── CORPUS DE BÚSQUEDA — RV1909 (dominio público) ──
+// Versículos adicionales SOLO para el buscador, organizados por los temas que
+// la gente busca de verdad. Antes el buscador solo miraba los 31 versículos
+// del "versículo del día", así que términos comunes como ansiedad, perdón,
+// gozo, familia o sanidad devolvían cero resultados.
+const RV1909_BUSQUEDA = [
+  // Ansiedad, preocupación, miedo
+  { ref:'Filipenses 4:6-7 • RV1909', text:'"Por nada estéis afanosos; sino sean notorias vuestras peticiones delante de Dios en toda oración y ruego, con hacimiento de gracias. Y la paz de Dios, que sobrepuja todo entendimiento, guardará vuestros corazones y vuestros entendimientos en Cristo Jesús."', temas:'ansiedad preocupacion afan angustia paz nervios estres' },
+  { ref:'1 Pedro 5:7 • RV1909', text:'"Echando toda vuestra solicitud en él, porque él tiene cuidado de vosotros."', temas:'ansiedad preocupacion carga descanso confianza' },
+  { ref:'Mateo 6:34 • RV1909', text:'"Así que, no os congojéis por el día de mañana; que el día de mañana traerá su fatiga: basta al día su afán."', temas:'ansiedad preocupacion futuro manana miedo' },
+  { ref:'2 Timoteo 1:7 • RV1909', text:'"Porque no nos ha dado Dios el espíritu de temor, sino el de fortaleza, y de amor, y de templanza."', temas:'miedo temor valor fuerza cobardia ansiedad' },
+  { ref:'Salmos 56:3 • RV1909', text:'"En el día que temo, yo en ti confío."', temas:'miedo temor confianza ansiedad' },
+
+  // Perdón
+  { ref:'Mateo 6:14 • RV1909', text:'"Porque si perdonareis á los hombres sus ofensas, os perdonará también á vosotros vuestro Padre celestial."', temas:'perdon perdonar ofensa rencor' },
+  { ref:'Efesios 4:32 • RV1909', text:'"Antes sed los unos con los otros benignos, misericordiosos, perdonándoos los unos á los otros, como también Dios os perdonó en Cristo."', temas:'perdon perdonar misericordia bondad rencor' },
+  { ref:'Colosenses 3:13 • RV1909', text:'"Sufriéndoos los unos á los otros, y perdonándoos los unos á los otros si alguno tuviere queja del otro: de la manera que Cristo os perdonó, así también hacedlo vosotros."', temas:'perdon perdonar queja rencor paciencia' },
+  { ref:'1 Juan 1:9 • RV1909', text:'"Si confesamos nuestros pecados, él es fiel y justo para que nos perdone nuestros pecados, y nos limpie de toda maldad."', temas:'perdon pecado confesion limpieza arrepentimiento culpa' },
+  { ref:'Salmos 103:12 • RV1909', text:'"Cuanto está lejos el oriente del occidente, hizo alejar de nosotros nuestras rebeliones."', temas:'perdon pecado culpa misericordia' },
+
+  // Sanidad, enfermedad
+  { ref:'Salmos 147:3 • RV1909', text:'"El sana á los quebrantados de corazón, y liga sus heridas."', temas:'sanidad sanar enfermedad herida dolor corazon tristeza' },
+  { ref:'Santiago 5:15 • RV1909', text:'"Y la oración de fe salvará al enfermo, y el Señor lo levantará; y si estuviere en pecados, le serán perdonados."', temas:'sanidad sanar enfermo enfermedad oracion fe' },
+  { ref:'Isaías 53:5 • RV1909', text:'"Mas él herido fué por nuestras rebeliones, molido por nuestros pecados: el castigo de nuestra paz sobre él; y por su llaga fuimos nosotros curados."', temas:'sanidad sanar curados enfermedad cruz salvacion' },
+  { ref:'Jeremías 30:17 • RV1909', text:'"Mas yo haré venir sanidad para ti, y te sanaré de tus heridas, dice Jehová."', temas:'sanidad sanar enfermedad herida restauracion' },
+
+  // Familia, matrimonio, hijos
+  { ref:'Josué 24:15 • RV1909', text:'"Yo y mi casa serviremos á Jehová."', temas:'familia casa hogar hijos decision' },
+  { ref:'Proverbios 22:6 • RV1909', text:'"Instruye al niño en su carrera: aun cuando fuere viejo no se apartará de ella."', temas:'familia hijos ninos educacion crianza padres' },
+  { ref:'Efesios 6:1-3 • RV1909', text:'"Hijos, obedeced en el Señor á vuestros padres; porque esto es justo. Honra á tu padre y á tu madre, que es el primer mandamiento con promesa."', temas:'familia hijos padres madre obediencia honra' },
+  { ref:'Efesios 5:25 • RV1909', text:'"Maridos, amad á vuestras mujeres, así como Cristo amó á la iglesia, y se entregó á sí mismo por ella."', temas:'familia matrimonio esposo esposa marido amor pareja' },
+  { ref:'Salmos 127:3 • RV1909', text:'"He aquí, heredad de Jehová son los hijos: cosa de estima el fruto del vientre."', temas:'familia hijos ninos bendicion' },
+
+  // Gozo, alegría, gratitud
+  { ref:'Nehemías 8:10 • RV1909', text:'"El gozo de Jehová es vuestra fortaleza."', temas:'gozo alegria fuerza fortaleza felicidad' },
+  { ref:'Salmos 118:24 • RV1909', text:'"Este es el día que hizo Jehová; nos gozaremos y alegraremos en él."', temas:'gozo alegria gratitud dia gracias' },
+  { ref:'1 Tesalonicenses 5:16-18 • RV1909', text:'"Estad siempre gozosos. Orad sin cesar. Dad gracias en todo; porque ésta es la voluntad de Dios para con vosotros en Cristo Jesús."', temas:'gozo alegria gratitud gracias oracion voluntad' },
+  { ref:'Salmos 100:4 • RV1909', text:'"Entrad por sus puertas con reconocimiento, por sus atrios con alabanza: alabadle, bendecid su nombre."', temas:'gratitud gracias alabanza adoracion' },
+
+  // Provisión, dinero, trabajo
+  { ref:'Filipenses 4:19 • RV1909', text:'"Mi Dios pues suplirá todo lo que os falta conforme á sus riquezas en gloria en Cristo Jesús."', temas:'provision dinero necesidad trabajo economia falta' },
+  { ref:'Mateo 6:26 • RV1909', text:'"Mirad las aves del cielo, que no siembran, ni siegan, ni allegan en alfolíes; y vuestro Padre celestial las alimenta. ¿No sois vosotros mucho mejores que ellas?"', temas:'provision dinero comida necesidad confianza ansiedad' },
+  { ref:'Proverbios 3:9-10 • RV1909', text:'"Honra á Jehová de tu sustancia, y de las primicias de todos tus frutos; y serán llenos tus alfolíes con abundancia."', temas:'dinero diezmo ofrenda provision abundancia' },
+  { ref:'Colosenses 3:23 • RV1909', text:'"Y todo lo que hagáis, hacedlo de ánimo, como al Señor, y no á los hombres."', temas:'trabajo esfuerzo empleo dedicacion' },
+
+  // Soledad, tristeza, duelo
+  { ref:'Deuteronomio 31:6 • RV1909', text:'"Esforzaos y cobrad ánimo; no temáis, ni tengáis miedo de ellos: que Jehová tu Dios es el que va contigo: no te dejará ni te desamparará."', temas:'soledad solo miedo companía valor abandono' },
+  { ref:'Salmos 68:6 • RV1909', text:'"Dios hace habitar en familia á los solos."', temas:'soledad solo familia companía' },
+  { ref:'Apocalipsis 21:4 • RV1909', text:'"Y limpiará Dios toda lágrima de los ojos de ellos; y la muerte no será más; y no habrá más llanto, ni clamor, ni dolor: porque las primeras cosas son pasadas."', temas:'duelo muerte luto tristeza llanto dolor consuelo esperanza' },
+  { ref:'Mateo 5:4 • RV1909', text:'"Bienaventurados los que lloran: porque ellos recibirán consolación."', temas:'duelo tristeza llanto luto consuelo' },
+  { ref:'Salmos 30:5 • RV1909', text:'"Por la tarde durará el lloro, y á la mañana vendrá la alegría."', temas:'tristeza llanto duelo esperanza alegria gozo' },
+
+  // Sabiduría, decisiones, dirección
+  { ref:'Santiago 1:5 • RV1909', text:'"Y si alguno de vosotros tiene falta de sabiduría, demándela á Dios, el cual da á todos abundantemente, y no zahiere; y le será dada."', temas:'sabiduria decision direccion consejo duda' },
+  { ref:'Salmos 32:8 • RV1909', text:'"Te haré entender, y te enseñaré el camino en que debes andar: sobre ti fijaré mis ojos."', temas:'sabiduria direccion camino decision guia' },
+  { ref:'Proverbios 16:9 • RV1909', text:'"El corazón del hombre piensa su camino: mas Jehová endereza sus pasos."', temas:'sabiduria direccion camino planes decision futuro' },
+
+  // Protección, fuerza
+  { ref:'Salmos 91:1-2 • RV1909', text:'"El que habita al abrigo del Altísimo, morará bajo la sombra del Omnipotente. Diré yo á Jehová: Esperanza mía, y castillo mío; mi Dios, en él confiaré."', temas:'proteccion refugio seguridad amparo miedo confianza' },
+  { ref:'Salmos 121:1-2 • RV1909', text:'"Alzaré mis ojos á los montes, de donde vendrá mi socorro. Mi socorro viene de Jehová, que hizo los cielos y la tierra."', temas:'proteccion ayuda socorro auxilio fuerza' },
+  { ref:'Isaías 43:2 • RV1909', text:'"Cuando pasares por las aguas, yo seré contigo; y por los ríos, no te anegarán. Cuando pasares por el fuego, no te quemarás, ni la llama arderá en ti."', temas:'proteccion prueba dificultad crisis fuerza' },
+  { ref:'Éxodo 14:14 • RV1909', text:'"Jehová peleará por vosotros, y vosotros estaréis quedos."', temas:'proteccion batalla pelea descanso confianza' },
+
+  // Salvación, propósito
+  { ref:'Romanos 10:9 • RV1909', text:'"Que si confesares con tu boca al Señor Jesús, y creyeres en tu corazón que Dios le levantó de los muertos, serás salvo."', temas:'salvacion salvo fe confesion evangelio' },
+  { ref:'Hechos 4:12 • RV1909', text:'"Y en ningún otro hay salud; porque no hay otro nombre debajo del cielo, dado á los hombres, en que podamos ser salvos."', temas:'salvacion salvo jesus nombre' },
+  { ref:'Efesios 2:10 • RV1909', text:'"Porque somos hechura suya, criados en Cristo Jesús para buenas obras, las cuales Dios preparó para que anduviésemos en ellas."', temas:'proposito llamado obras identidad vocacion' },
+  { ref:'Jeremías 1:5 • RV1909', text:'"Antes que te formase en el vientre te conocí, y antes que salieses de la matriz te santifiqué."', temas:'proposito llamado identidad valor conocido' },
+
+  // Tentación, lucha, humildad
+  { ref:'1 Corintios 10:13 • RV1909', text:'"No os ha tomado tentación, sino humana: mas fiel es Dios, que no os dejará ser tentados más de lo que podéis llevar; antes dará también juntamente con la tentación la salida."', temas:'tentacion lucha pecado vicio fuerza salida' },
+  { ref:'Santiago 4:7 • RV1909', text:'"Someteos pues á Dios; resistid al diablo, y de vosotros huirá."', temas:'tentacion lucha diablo resistir batalla' },
+  { ref:'Santiago 4:10 • RV1909', text:'"Humillaos delante del Señor, y él os ensalzará."', temas:'humildad orgullo sumision' },
+  { ref:'Proverbios 3:34 • RV1909', text:'"Ciertamente él escarnecerá á los escarnecedores, y á los humildes dará gracia."', temas:'humildad orgullo gracia' },
+];
+
 function getRV1909Diario() {
   const idx = Math.floor(Date.now() / 86400000) % RV1909_DIARIOS.length;
   return RV1909_DIARIOS[idx];
 }
 
 function buscarRV1909(query) {
-  const q = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const normalizar = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+  // Normaliza variantes de nombres de libros que la gente escribe distinto,
+  // para que "Salmo 23" encuentre lo mismo que "Salmos 23" (antes daba cero,
+  // aunque era el propio ejemplo del campo de búsqueda).
+  const sinonimos = (s) => s
+    .replace(/\bsalmo\b/g, 'salmos')
+    .replace(/\bproverbio\b/g, 'proverbios')
+    .replace(/\bhecho\b/g, 'hechos')
+    .replace(/\bcorintio\b/g, 'corintios')
+    .replace(/\bromano\b/g, 'romanos')
+    .replace(/\befesio\b/g, 'efesios')
+    .replace(/\bfilipense\b/g, 'filipenses')
+    .replace(/\bcolosense\b/g, 'colosenses')
+    .replace(/\btesalonicense\b/g, 'tesalonicenses')
+    .replace(/\bhebreo\b/g, 'hebreos');
+
+  const q = sinonimos(normalizar(query)).trim();
+  if (!q) return [];
+
+  // Busca por palabras sueltas en vez de exigir la frase completa: así
+  // "perdon de dios" encuentra versículos aunque no digan esa frase exacta.
+  const palabras = q.split(/\s+/).filter(p => p.length > 1);
+  const corpus = RV1909_DIARIOS.concat(RV1909_BUSQUEDA);
   const vistos = new Set();
-  return RV1909_DIARIOS.filter(v => {
-    if (vistos.has(v.ref)) return false;
+  const conPuntaje = [];
+
+  corpus.forEach(v => {
+    if (vistos.has(v.ref)) return;
     vistos.add(v.ref);
-    const texto = (v.ref+' '+v.text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-    return texto.includes(q);
-  }).slice(0, 8);
+    const heno = sinonimos(normalizar(v.ref + ' ' + v.text + ' ' + (v.temas || '')));
+    let puntaje = 0;
+    if (heno.includes(q)) puntaje += 10; // coincidencia de la frase completa pesa más
+    palabras.forEach(p => { if (heno.includes(p)) puntaje += 1; });
+    if (puntaje > 0) conPuntaje.push({ v, puntaje });
+  });
+
+  return conPuntaje.sort((a, b) => b.puntaje - a.puntaje).slice(0, 8).map(x => x.v);
 }
 
 // Versículos diarios rotativos (fallback si no hay API key)
