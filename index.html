@@ -34,7 +34,7 @@ if ('serviceWorker' in navigator) {
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, sendPasswordResetEmail, onAuthStateChanged, deleteUser, EmailAuthProvider, reauthenticateWithCredential, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, collection, addDoc, getDocs, getDoc, serverTimestamp, query, orderBy, where, limit, doc, updateDoc, increment, setDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, getDocs, getDoc, serverTimestamp, query, orderBy, where, limit, startAfter, doc, updateDoc, increment, setDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAH_DqIXCpuuVeJJ-H1smLKJMeLz-4hi-s",
@@ -140,11 +140,26 @@ try {
     } catch(e) { return false; }
   };
 
-  window.loadFirebasePosts = async () => {
+  // H10 — Antes tenía limit(20) fijo sin forma de avanzar: nadie veía el post 21.
+  // Ahora acepta un cursor (el último documento de la tanda anterior) y devuelve
+  // también si quedan más, para que el cliente pueda mostrar "Ver más".
+  window.loadFirebasePosts = async (cursor = null) => {
     try {
-      const q = query(collection(db, 'posts'), orderBy('createdAt','desc'), limit(20));
-      const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const PAGINA = 20;
+      const partes = [collection(db, 'posts'), orderBy('createdAt','desc')];
+      if (cursor) partes.push(startAfter(cursor));
+      partes.push(limit(PAGINA + 1)); // pedimos uno extra para saber si hay más
+
+      const snap = await getDocs(query(...partes));
+      const docs = snap.docs;
+      const hayMas = docs.length > PAGINA;
+      const visibles = hayMas ? docs.slice(0, PAGINA) : docs;
+
+      return {
+        posts: visibles.map(d => ({ id: d.id, ...d.data() })),
+        cursor: visibles.length ? visibles[visibles.length - 1] : null,
+        hayMas,
+      };
     } catch(e) { return null; }
   };
 
@@ -1623,6 +1638,293 @@ function getLevel(points) {
   return { level: current.level, name: current.name, next: nextTier ? nextTier.min : current.min + 100 };
 }
 
+/* ══════════════════════════════════════════════════════════
+   SISTEMA DE SUSCRIPCIONES — Google Play Billing
+   Construido 4 ago 2026. DESACTIVADO hasta terminar la configuración
+   en Play Console (ver PASOS_PENDIENTES.md).
+
+   Cómo funciona el pago dentro de una TWA: la Digital Goods API solo existe
+   cuando la app corre instalada desde Play Store. En un navegador normal no
+   existe, por eso pagosDisponibles() la detecta en vez de asumir.
+
+   Principios que sigue esta implementación:
+   - El servidor manda. El estado del cliente es solo un caché visual; quien
+     decide si alguien tiene Premium es el Worker validando contra Google.
+   - acknowledge obligatorio: si no se confirma la compra en 3 días, Google
+     la reembolsa automáticamente y el usuario pierde el acceso que pagó.
+   - Respetar el periodo de gracia: si un cobro falla, Google reintenta durante
+     días y el usuario DEBE conservar el acceso mientras tanto. Cortarlo de
+     inmediato es un error común que genera cancelaciones y malas reseñas.
+   - Restaurar compras: si cambia de teléfono o reinstala, tiene que poder
+     recuperar lo que pagó sin volver a pagar.
+   - Link para gestionar la suscripción: Google lo exige en sus políticas.
+   ══════════════════════════════════════════════════════════ */
+const PAGOS_ACTIVO = false; // ← poner true solo después de completar PASOS_PENDIENTES.md
+const WORKER_URL = 'https://soft-art-11eb.elestacerc4eloim.workers.dev';
+
+const PLANES_PAGO = [
+  {
+    id: 'premium_mensual',
+    nombre: 'Premium',
+    precio: '$1 USD / mes',
+    descripcion: 'Para tu caminar personal',
+    beneficios: [
+      'Chat con IA sin límite diario',
+      'Todos los planes de lectura',
+      'Sin anuncios, para siempre',
+    ],
+  },
+  {
+    id: 'iglesia_mensual',
+    nombre: 'Iglesia',
+    precio: '$5 USD / mes',
+    descripcion: 'Para grupos pequeños y células',
+    beneficios: [
+      'Todo lo de Premium',
+      'Peticiones de oración privadas del grupo',
+      'Planes de lectura compartidos',
+    ],
+  },
+  {
+    id: 'ministerio_mensual',
+    nombre: 'Ministerio',
+    precio: '$10 USD / mes',
+    descripcion: 'Para iglesias y pastores',
+    beneficios: [
+      'Todo lo de Iglesia',
+      'Panel para varios grupos',
+      'Soporte prioritario',
+    ],
+  },
+];
+
+// Estado de suscripción. Es solo un caché para pintar la interfaz rápido;
+// la fuente de verdad siempre es el servidor.
+let suscripcion = { activa: false, plan: null, enGracia: false, verificadoEn: null };
+
+function esPremium() {
+  // Durante el periodo de gracia el acceso se mantiene: Google sigue
+  // reintentando el cobro y cortar aquí sería castigar al usuario por
+  // una tarjeta vencida.
+  return suscripcion.activa || suscripcion.enGracia;
+}
+
+// La Digital Goods API solo existe dentro de la app instalada desde Play Store.
+async function pagosDisponibles() {
+  if (!PAGOS_ACTIVO) return false;
+  if (!('getDigitalGoodsService' in window)) return false;
+  try {
+    await window.getDigitalGoodsService('https://play.google.com/billing');
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function verificarSuscripcionEnServidor(token, planId) {
+  try {
+    const idToken = window._fbUser ? await window._fbUser.getIdToken() : null;
+    if (!idToken) return { ok: false, motivo: 'sin-sesion' };
+
+    const res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ accion: 'verificar-compra', token, planId }),
+    });
+    if (!res.ok) return { ok: false, motivo: 'servidor' };
+    return await res.json();
+  } catch (e) {
+    return { ok: false, motivo: 'red' };
+  }
+}
+
+// Consulta al servidor si este usuario tiene suscripción activa.
+// Se llama al iniciar sesión, no en cada pantalla.
+async function refrescarEstadoSuscripcion() {
+  if (!PAGOS_ACTIVO) return;
+  try {
+    const idToken = window._fbUser ? await window._fbUser.getIdToken() : null;
+    if (!idToken) return;
+
+    const res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ accion: 'estado-suscripcion' }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    suscripcion = {
+      activa: !!data.activa,
+      plan: data.plan || null,
+      enGracia: !!data.enGracia,
+      verificadoEn: Date.now(),
+    };
+  } catch (e) { /* si falla, se conserva el último estado conocido */ }
+}
+
+async function comprarPlan(planId) {
+  const plan = PLANES_PAGO.find(p => p.id === planId);
+  if (!plan) return;
+
+  if (!(await pagosDisponibles())) {
+    showToast('Los pagos solo funcionan en la app instalada desde Google Play.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-comprar-' + planId);
+  if (btn) { btn.textContent = 'Procesando...'; btn.disabled = true; }
+
+  try {
+    const request = new PaymentRequest(
+      [{ supportedMethods: 'https://play.google.com/billing', data: { sku: planId } }],
+      { total: { label: plan.nombre, amount: { currency: 'USD', value: '0' } } }
+    );
+
+    const response = await request.show();
+    const token = response.details.purchaseToken;
+
+    // El servidor valida contra la API de Google antes de dar acceso.
+    // Nunca confiar en que el cliente diga "ya pagué".
+    const verificado = await verificarSuscripcionEnServidor(token, planId);
+
+    if (!verificado.ok) {
+      await response.complete('fail');
+      showToast('No pudimos confirmar tu pago. Si se te cobró, escríbenos y lo resolvemos.');
+      if (btn) { btn.textContent = 'Suscribirme'; btn.disabled = false; }
+      return;
+    }
+
+    // acknowledge: sin esto Google reembolsa la compra a los 3 días.
+    // El servidor ya lo hizo al validar; aquí solo cerramos el flujo de pago.
+    await response.complete('success');
+
+    suscripcion = { activa: true, plan: planId, enGracia: false, verificadoEn: Date.now() };
+    showToast('¡Gracias! Tu suscripción ' + plan.nombre + ' está activa.');
+    openPlanesPago();
+
+  } catch (e) {
+    // AbortError = el usuario cerró la ventana de pago. No es un error real.
+    if (e && e.name !== 'AbortError') {
+      showToast('No se pudo completar la compra.');
+    }
+    if (btn) { btn.textContent = 'Suscribirme'; btn.disabled = false; }
+  }
+}
+
+// Restaurar compras: imprescindible si cambia de teléfono o reinstala.
+async function restaurarCompras() {
+  const btn = document.getElementById('btn-restaurar');
+  if (btn) { btn.textContent = 'Buscando...'; btn.disabled = true; }
+
+  if (!(await pagosDisponibles())) {
+    showToast('Los pagos solo funcionan en la app instalada desde Google Play.');
+    if (btn) { btn.textContent = 'Restaurar compras'; btn.disabled = false; }
+    return;
+  }
+
+  try {
+    const servicio = await window.getDigitalGoodsService('https://play.google.com/billing');
+    const compras = await servicio.listPurchases();
+
+    if (!compras.length) {
+      showToast('No encontramos compras anteriores con esta cuenta de Google.');
+      if (btn) { btn.textContent = 'Restaurar compras'; btn.disabled = false; }
+      return;
+    }
+
+    for (const compra of compras) {
+      const verificado = await verificarSuscripcionEnServidor(compra.purchaseToken, compra.itemId);
+      if (verificado.ok && verificado.activa) {
+        suscripcion = { activa: true, plan: compra.itemId, enGracia: !!verificado.enGracia, verificadoEn: Date.now() };
+        showToast('¡Listo! Restauramos tu suscripción.');
+        openPlanesPago();
+        return;
+      }
+    }
+
+    showToast('No encontramos una suscripción activa para restaurar.');
+    if (btn) { btn.textContent = 'Restaurar compras'; btn.disabled = false; }
+  } catch (e) {
+    showToast('No se pudieron restaurar las compras.');
+    if (btn) { btn.textContent = 'Restaurar compras'; btn.disabled = false; }
+  }
+}
+
+// Google exige que la app ofrezca una forma de gestionar la suscripción.
+function gestionarSuscripcion() {
+  const plan = suscripcion.plan;
+  const url = plan
+    ? `https://play.google.com/store/account/subscriptions?sku=${plan}&package=app.menteclara.oracion`
+    : 'https://play.google.com/store/account/subscriptions';
+  window.open(url, '_blank');
+}
+
+function openPlanesPago() {
+  const content = document.getElementById('main-content');
+
+  if (!PAGOS_ACTIVO) {
+    content.innerHTML = `
+    <div class="section-label">Apoya MenteClara</div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:13px;color:var(--text);line-height:1.6">
+        Las suscripciones todavía no están disponibles. Por ahora MenteClara es
+        gratis y completa, y si quieres apoyar el proyecto puedes hacerlo con una
+        donación voluntaria.
+      </div>
+    </div>
+    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))">← Volver</button>`;
+    return;
+  }
+
+  const activo = esPremium();
+
+  const tarjetas = PLANES_PAGO.map(p => {
+    const esActual = suscripcion.plan === p.id && activo;
+    return `
+    <div class="card" style="margin-bottom:12px;${esActual ? 'border-color:var(--gold)' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div>
+          <div style="font-weight:600;font-size:15px;color:var(--text)">${p.nombre}</div>
+          <div class="card-sub">${p.descripcion}</div>
+        </div>
+        <div style="font-size:13px;color:var(--gold);white-space:nowrap">${p.precio}</div>
+      </div>
+      <ul style="margin:10px 0 0 16px;padding:0;font-size:12px;color:var(--text-dim);line-height:1.7">
+        ${p.beneficios.map(b => `<li>${b}</li>`).join('')}
+      </ul>
+      ${esActual
+        ? `<div style="margin-top:10px;font-size:12px;color:var(--gold)">✓ Tu plan actual</div>`
+        : `<button class="btn-primary" id="btn-comprar-${p.id}" onclick="comprarPlan('${p.id}')" style="margin-top:10px">Suscribirme</button>`}
+    </div>`;
+  }).join('');
+
+  const avisoGracia = suscripcion.enGracia ? `
+    <div class="card" style="margin-bottom:12px;border-color:#e0a03d">
+      <div style="font-size:12px;color:var(--text-dim);line-height:1.5">
+        Hubo un problema con tu último pago. Conservas el acceso completo mientras
+        Google reintenta el cobro. Puedes actualizar tu método de pago desde
+        "Gestionar suscripción".
+      </div>
+    </div>` : '';
+
+  content.innerHTML = `
+  <div class="section-label">Planes</div>
+  ${avisoGracia}
+  <div class="card-sub" style="margin-bottom:14px">
+    La Biblia, los devocionales y la comunidad son gratis para siempre.
+    Estos planes sostienen el proyecto y desbloquean funciones extra.
+  </div>
+  ${tarjetas}
+  <button class="btn-ghost" id="btn-restaurar" onclick="restaurarCompras()" style="margin-top:6px">Restaurar compras</button>
+  ${activo ? `<button class="btn-ghost" onclick="gestionarSuscripcion()" style="margin-top:6px">Gestionar suscripción</button>` : ''}
+  <div style="font-size:11px;color:var(--text-dim);margin-top:12px;line-height:1.5">
+    Las suscripciones se renuevan automáticamente. Puedes cancelarlas cuando
+    quieras desde Google Play; conservarás el acceso hasta que termine el
+    periodo que ya pagaste.
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+}
+
 function renderHome() {
   const userPoints = getUserPoints();
   const lvl = getLevel(userPoints);
@@ -2063,34 +2365,12 @@ function formatPostTime(createdAt) {
   return dias === 1 ? 'ayer' : `hace ${dias} días`;
 }
 
-async function loadCommunityPosts() {
-  const feed = document.getElementById('community-feed');
-  if (!feed) return;
+// Cursor de paginación de la comunidad (H10). Se reinicia al recargar el feed.
+let comunidadCursor = null;
+let comunidadHayMas = false;
 
-  if (!window.loadFirebasePosts) {
-    feed.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudo conectar con la comunidad en este momento.</div>`;
-    return;
-  }
-
-  const posts = await window.loadFirebasePosts();
-  const feedNow = document.getElementById('community-feed');
-  if (!feedNow) return; // el usuario cambió de pestaña mientras cargaba
-
-  if (posts === null) {
-    feedNow.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudieron cargar las peticiones. Revisa tu conexión.</div>`;
-    return;
-  }
-
-  const visibles = posts.filter(p => !p.reported);
-  if (visibles.length === 0) {
-    feedNow.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:13px">Aún no hay peticiones. Sé el primero en compartir una.</div>`;
-    return;
-  }
-
-  communityPosts.length = 0;
-  visibles.forEach(p => communityPosts.push(p));
-
-  feedNow.innerHTML = visibles.map(p => `
+function tarjetaPost(p) {
+  return `
   <div class="post-card" id="post-${p.id}">
     <div class="post-header">
       <span class="post-user">${escapeHtml('Hermano ' + (p.anonId || 'anónimo'))}</span>
@@ -2101,16 +2381,92 @@ async function loadCommunityPosts() {
       <button class="pray-btn" id="pray-${p.id}" onclick="togglePray('${p.id}',this)">🙏 <span>${p.praying || 0} ${getText('praying')}</span></button>
       <button class="report-btn" onclick="openReport('${p.id}')">⚑</button>
     </div>
-  </div>`).join('');
+  </div>`;
+}
 
-  // Marca visualmente los posts por los que este usuario ya oró
-  if (window.hasPrayedFor) {
-    visibles.forEach(async p => {
-      if (await window.hasPrayedFor(p.id)) {
-        const btn = document.getElementById('pray-' + p.id);
-        if (btn) { btn.classList.add('prayed'); btn.disabled = true; }
-      }
-    });
+// Marca visualmente los posts por los que este usuario ya oró
+function marcarYaOrados(posts) {
+  if (!window.hasPrayedFor) return;
+  posts.forEach(async p => {
+    if (await window.hasPrayedFor(p.id)) {
+      const btn = document.getElementById('pray-' + p.id);
+      if (btn) { btn.classList.add('prayed'); btn.disabled = true; }
+    }
+  });
+}
+
+function botonVerMas() {
+  return comunidadHayMas
+    ? `<button id="btn-ver-mas" class="btn-ghost" onclick="cargarMasPosts()" style="margin-top:10px">Ver más peticiones</button>`
+    : '';
+}
+
+async function loadCommunityPosts() {
+  const feed = document.getElementById('community-feed');
+  if (!feed) return;
+
+  comunidadCursor = null;
+  comunidadHayMas = false;
+
+  if (!window.loadFirebasePosts) {
+    feed.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudo conectar con la comunidad en este momento.</div>`;
+    return;
+  }
+
+  const res = await window.loadFirebasePosts();
+  const feedNow = document.getElementById('community-feed');
+  if (!feedNow) return; // el usuario cambió de pestaña mientras cargaba
+
+  if (res === null) {
+    feedNow.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudieron cargar las peticiones. Revisa tu conexión.</div>`;
+    return;
+  }
+
+  comunidadCursor = res.cursor;
+  comunidadHayMas = res.hayMas;
+
+  const visibles = res.posts.filter(p => !p.reported);
+  if (visibles.length === 0 && !comunidadHayMas) {
+    feedNow.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:13px">Aún no hay peticiones. Sé el primero en compartir una.</div>`;
+    return;
+  }
+
+  communityPosts.length = 0;
+  visibles.forEach(p => communityPosts.push(p));
+
+  feedNow.innerHTML = `<div id="posts-lista">${visibles.map(tarjetaPost).join('')}</div>${botonVerMas()}`;
+  marcarYaOrados(visibles);
+}
+
+async function cargarMasPosts() {
+  const btn = document.getElementById('btn-ver-mas');
+  if (!btn || !comunidadCursor) return;
+  btn.textContent = 'Cargando...';
+  btn.disabled = true;
+
+  const res = await window.loadFirebasePosts(comunidadCursor);
+  const lista = document.getElementById('posts-lista');
+  if (!lista) return; // cambió de pestaña
+
+  if (res === null) {
+    btn.textContent = 'No se pudo cargar. Reintentar';
+    btn.disabled = false;
+    return;
+  }
+
+  comunidadCursor = res.cursor;
+  comunidadHayMas = res.hayMas;
+
+  const nuevos = res.posts.filter(p => !p.reported);
+  nuevos.forEach(p => communityPosts.push(p));
+  lista.insertAdjacentHTML('beforeend', nuevos.map(tarjetaPost).join(''));
+  marcarYaOrados(nuevos);
+
+  if (comunidadHayMas) {
+    btn.textContent = 'Ver más peticiones';
+    btn.disabled = false;
+  } else {
+    btn.remove();
   }
 }
 
@@ -2125,6 +2481,15 @@ const pueblos = [
   { name:'Pueblo Uzbeko', country:'Uzbekistán', pop:'aprox. 30 millones', religion:'Islam', verse:'"He aquí que yo estoy con vosotros todos los días, hasta el fin del mundo." — Mateo 28:20', praying:132 },
   { name:'Pueblo Wolof', country:'Senegal', pop:'aprox. 6 millones', religion:'Islam', verse:'"Dios amó tanto al mundo que dio a su Hijo unigénito." — Juan 3:16', praying:87 },
   { name:'Pueblo Japonés', country:'Japón', pop:'aprox. 123 millones', religion:'Budismo y sintoísmo', verse:'"Porque somos hechura suya, creados en Cristo Jesús para buenas obras." — Efesios 2:10', praying:154 },
+  { name:'Pueblo Turco', country:'Turquía', pop:'aprox. 60 millones', religion:'Islam', verse:'"Venid a mí todos los que estáis trabajados y cargados, y yo os haré descansar." — Mateo 11:28', praying:143 },
+  { name:'Pueblo Bengalí', country:'Bangladés e India', pop:'aprox. 100 millones', religion:'Islam', verse:'"Lámpara es a mis pies tu palabra, y lumbrera a mi camino." — Salmo 119:105', praying:112 },
+  { name:'Pueblo Yadav', country:'India', pop:'aprox. 60 millones', religion:'Hinduismo', verse:'"Yo soy el camino, y la verdad, y la vida." — Juan 14:6', praying:96 },
+  { name:'Pueblo Thai', country:'Tailandia', pop:'aprox. 25 millones', religion:'Budismo', verse:'"Gustad, y ved que es bueno Jehová." — Salmo 34:8', praying:128 },
+  { name:'Pueblo Azerí', country:'Azerbaiyán e Irán', pop:'aprox. 25 millones', religion:'Islam', verse:'"Clama a mí, y yo te responderé." — Jeremías 33:3', praying:74 },
+  { name:'Pueblo Fulani', country:'África Occidental', pop:'aprox. 40 millones', religion:'Islam', verse:'"Como el pastor busca su rebaño, así buscaré mis ovejas." — Ezequiel 34:12', praying:83 },
+  { name:'Pueblo Persa', country:'Irán', pop:'aprox. 50 millones', religion:'Islam', verse:'"Yo os daré descanso para vuestras almas." — Mateo 11:29', praying:207 },
+  { name:'Pueblo Kazajo', country:'Kazajistán', pop:'aprox. 14 millones', religion:'Islam', verse:'"Esforzaos y cobrad ánimo; no temáis, porque Jehová tu Dios va contigo." — Deuteronomio 31:6', praying:69 },
+  { name:'Pueblo Han (zonas rurales)', country:'China', pop:'cientos de millones sin acceso', religion:'Ateísmo y religión popular', verse:'"La luz en las tinieblas resplandece, y las tinieblas no prevalecieron contra ella." — Juan 1:5', praying:198 },
 ];
 
 function renderPueblos() {
@@ -2388,6 +2753,193 @@ const readingPlans = {
     ],
   },
 };
+/* ── Planes agregados 4 ago 2026 ─────────────────────────────
+   Completan las 20 categorías que el código ya contemplaba.
+   Cada plan: 7 días, referencia real + descripción en RV1909.
+   ──────────────────────────────────────────────────────────── */
+Object.assign(readingPlans, {
+  juan: {
+    name: 'Juan', desc: 'Quién es Jesús, según quien lo conoció — 7 días',
+    items: [
+      { ref:'Juan 1:1-14', desc:'En el principio era el Verbo, y el Verbo fue hecho carne.', done:false, today:true },
+      { ref:'Juan 3:16-17', desc:'Porque de tal manera amó Dios al mundo.', done:false, today:false },
+      { ref:'Juan 4:7-26', desc:'La mujer samaritana: el agua que salta para vida eterna.', done:false, today:false },
+      { ref:'Juan 8:1-11', desc:'El que esté sin pecado arroje la primera piedra.', done:false, today:false },
+      { ref:'Juan 11:17-44', desc:'Yo soy la resurrección y la vida.', done:false, today:false },
+      { ref:'Juan 14:1-6', desc:'Yo soy el camino, la verdad y la vida.', done:false, today:false },
+      { ref:'Juan 15:1-12', desc:'Yo soy la vid, vosotros los pámpanos.', done:false, today:false },
+    ],
+  },
+  genesis: {
+    name: 'Génesis', desc: 'Los comienzos: creación, promesa y providencia — 7 días',
+    items: [
+      { ref:'Génesis 1:1-31', desc:'En el principio creó Dios los cielos y la tierra.', done:false, today:true },
+      { ref:'Génesis 2:1-9', desc:'El descanso del séptimo día y el huerto.', done:false, today:false },
+      { ref:'Génesis 3:1-15', desc:'La caída, y la primera promesa de redención.', done:false, today:false },
+      { ref:'Génesis 6:9-22', desc:'Noé halló gracia en los ojos de Jehová.', done:false, today:false },
+      { ref:'Génesis 12:1-9', desc:'El llamado de Abram: sal de tu tierra.', done:false, today:false },
+      { ref:'Génesis 22:1-18', desc:'Jehová proveerá: la fe probada de Abraham.', done:false, today:false },
+      { ref:'Génesis 50:15-21', desc:'Vosotros pensasteis mal, mas Dios lo encaminó a bien.', done:false, today:false },
+    ],
+  },
+  oracion: {
+    name: 'Oración', desc: 'Aprender a hablar con Dios — 7 días',
+    items: [
+      { ref:'Mateo 6:5-15', desc:'El Padre Nuestro: cómo enseñó Jesús a orar.', done:false, today:true },
+      { ref:'Lucas 11:5-13', desc:'Pedid, y se os dará; buscad, y hallaréis.', done:false, today:false },
+      { ref:'Lucas 18:1-8', desc:'La viuda persistente: orar siempre y no desmayar.', done:false, today:false },
+      { ref:'Filipenses 4:6-7', desc:'Por nada estéis afanosos; sean notorias vuestras peticiones.', done:false, today:false },
+      { ref:'Santiago 5:13-16', desc:'La oración eficaz del justo puede mucho.', done:false, today:false },
+      { ref:'1 Tesalonicenses 5:16-18', desc:'Orad sin cesar; en todo dad gracias.', done:false, today:false },
+      { ref:'Mateo 26:36-46', desc:'Getsemaní: no sea como yo quiero, sino como tú.', done:false, today:false },
+    ],
+  },
+  espiritu_santo: {
+    name: 'Espíritu Santo', desc: 'El Consolador prometido — 7 días',
+    items: [
+      { ref:'Juan 14:15-27', desc:'Os enviaré otro Consolador, para que esté con vosotros.', done:false, today:true },
+      { ref:'Juan 16:5-15', desc:'Él os guiará a toda verdad.', done:false, today:false },
+      { ref:'Hechos 1:4-8', desc:'Recibiréis poder cuando venga sobre vosotros el Espíritu.', done:false, today:false },
+      { ref:'Hechos 2:1-13', desc:'Pentecostés: todos fueron llenos del Espíritu Santo.', done:false, today:false },
+      { ref:'Romanos 8:1-17', desc:'El Espíritu da vida, y clama Abba, Padre.', done:false, today:false },
+      { ref:'Gálatas 5:16-26', desc:'El fruto del Espíritu: amor, gozo, paz, paciencia...', done:false, today:false },
+      { ref:'1 Corintios 12:1-11', desc:'Diversidad de dones, pero un mismo Espíritu.', done:false, today:false },
+    ],
+  },
+  paz: {
+    name: 'Paz', desc: 'La paz que sobrepuja todo entendimiento — 7 días',
+    items: [
+      { ref:'Juan 14:27', desc:'La paz os dejo, mi paz os doy; no como el mundo la da.', done:false, today:true },
+      { ref:'Isaías 26:3', desc:'Tú guardarás en completa paz a aquel cuyo pensamiento en ti persevera.', done:false, today:false },
+      { ref:'Romanos 5:1-5', desc:'Justificados por la fe, tenemos paz para con Dios.', done:false, today:false },
+      { ref:'Colosenses 3:15', desc:'La paz de Dios gobierne en vuestros corazones.', done:false, today:false },
+      { ref:'Salmo 4:8', desc:'En paz me acostaré, y asimismo dormiré.', done:false, today:false },
+      { ref:'Marcos 4:35-41', desc:'Calla, enmudece: Jesús calma la tempestad.', done:false, today:false },
+      { ref:'Filipenses 4:8-9', desc:'En esto pensad, y el Dios de paz estará con vosotros.', done:false, today:false },
+    ],
+  },
+  gratitud: {
+    name: 'Gratitud', desc: 'Un corazón que reconoce — 7 días',
+    items: [
+      { ref:'Salmo 100', desc:'Entrad por sus puertas con acción de gracias.', done:false, today:true },
+      { ref:'1 Tesalonicenses 5:18', desc:'Dad gracias en todo, porque esta es la voluntad de Dios.', done:false, today:false },
+      { ref:'Lucas 17:11-19', desc:'Los diez leprosos: solo uno volvió a dar gracias.', done:false, today:false },
+      { ref:'Salmo 103:1-5', desc:'Bendice, alma mía, a Jehová, y no olvides sus beneficios.', done:false, today:false },
+      { ref:'Colosenses 3:16-17', desc:'Haced todo dando gracias a Dios Padre por medio de él.', done:false, today:false },
+      { ref:'Efesios 5:20', desc:'Dando siempre gracias por todo al Dios y Padre.', done:false, today:false },
+      { ref:'Salmo 136:1-9', desc:'Alabad a Jehová, porque para siempre es su misericordia.', done:false, today:false },
+    ],
+  },
+  sufrimiento: {
+    name: 'Sufrimiento', desc: 'Cuando duele y Dios no se ha ido — 7 días',
+    items: [
+      { ref:'Job 1:13-22', desc:'Jehová dio, y Jehová quitó; sea el nombre de Jehová bendito.', done:false, today:true },
+      { ref:'Salmo 34:17-19', desc:'Muchas son las aflicciones del justo, pero de todas le librará.', done:false, today:false },
+      { ref:'Romanos 8:18-28', desc:'Las aflicciones de este tiempo no son comparables con la gloria.', done:false, today:false },
+      { ref:'2 Corintios 1:3-7', desc:'El Dios de toda consolación, que nos consuela en la tribulación.', done:false, today:false },
+      { ref:'2 Corintios 12:7-10', desc:'Bástate mi gracia; mi poder se perfecciona en la debilidad.', done:false, today:false },
+      { ref:'1 Pedro 4:12-19', desc:'No os sorprendáis del fuego de prueba que os ha sobrevenido.', done:false, today:false },
+      { ref:'Apocalipsis 21:1-5', desc:'Enjugará Dios toda lágrima de los ojos de ellos.', done:false, today:false },
+    ],
+  },
+  amor: {
+    name: 'Amor', desc: 'Cómo ama Dios y cómo amar — 7 días',
+    items: [
+      { ref:'1 Corintios 13', desc:'El amor es sufrido, es benigno; nunca deja de ser.', done:false, today:true },
+      { ref:'1 Juan 4:7-21', desc:'Dios es amor; amémonos unos a otros.', done:false, today:false },
+      { ref:'Juan 13:34-35', desc:'En esto conocerán todos que sois mis discípulos.', done:false, today:false },
+      { ref:'Romanos 12:9-21', desc:'El amor sea sin fingimiento; vence con el bien el mal.', done:false, today:false },
+      { ref:'Lucas 10:25-37', desc:'El buen samaritano: ¿quién es mi prójimo?', done:false, today:false },
+      { ref:'Romanos 8:31-39', desc:'Nada nos podrá separar del amor de Dios.', done:false, today:false },
+      { ref:'Efesios 3:14-21', desc:'Conocer el amor de Cristo, que excede a todo conocimiento.', done:false, today:false },
+    ],
+  },
+  familia: {
+    name: 'Familia', desc: 'El hogar como lugar de Dios — 7 días',
+    items: [
+      { ref:'Deuteronomio 6:4-9', desc:'Las repetirás a tus hijos, y hablarás de ellas en tu casa.', done:false, today:true },
+      { ref:'Efesios 5:22-33', desc:'Maridos, amad a vuestras mujeres como Cristo amó a la iglesia.', done:false, today:false },
+      { ref:'Efesios 6:1-4', desc:'Hijos, obedeced; padres, no provoquéis a ira a vuestros hijos.', done:false, today:false },
+      { ref:'Proverbios 22:6', desc:'Instruye al niño en su camino.', done:false, today:false },
+      { ref:'Josué 24:14-15', desc:'Yo y mi casa serviremos a Jehová.', done:false, today:false },
+      { ref:'Salmo 127', desc:'Si Jehová no edificare la casa, en vano trabajan los que la edifican.', done:false, today:false },
+      { ref:'Colosenses 3:18-21', desc:'Instrucciones para la vida en el hogar.', done:false, today:false },
+    ],
+  },
+  identidad: {
+    name: 'Identidad', desc: 'Quién dice Dios que eres — 7 días',
+    items: [
+      { ref:'Salmo 139:1-18', desc:'Formidables y maravillosas son tus obras; me formaste.', done:false, today:true },
+      { ref:'Efesios 2:1-10', desc:'Somos hechura suya, creados en Cristo Jesús.', done:false, today:false },
+      { ref:'Juan 1:12-13', desc:'Les dio potestad de ser hechos hijos de Dios.', done:false, today:false },
+      { ref:'1 Pedro 2:9-10', desc:'Vosotros sois linaje escogido, real sacerdocio.', done:false, today:false },
+      { ref:'Gálatas 2:20', desc:'Ya no vivo yo, mas vive Cristo en mí.', done:false, today:false },
+      { ref:'2 Corintios 5:17', desc:'Si alguno está en Cristo, nueva criatura es.', done:false, today:false },
+      { ref:'Romanos 8:14-17', desc:'Sois hijos de Dios, y coherederos con Cristo.', done:false, today:false },
+    ],
+  },
+  proposito: {
+    name: 'Propósito', desc: 'Para qué estás aquí — 7 días',
+    items: [
+      { ref:'Jeremías 29:11-13', desc:'Yo sé los pensamientos que tengo acerca de vosotros.', done:false, today:true },
+      { ref:'Proverbios 16:1-9', desc:'El hombre propone, mas Jehová endereza sus pasos.', done:false, today:false },
+      { ref:'Efesios 2:10', desc:'Creados para buenas obras, las cuales Dios preparó de antemano.', done:false, today:false },
+      { ref:'Romanos 12:1-8', desc:'Presentad vuestros cuerpos en sacrificio vivo.', done:false, today:false },
+      { ref:'Eclesiastés 3:1-14', desc:'Todo tiene su tiempo bajo el cielo.', done:false, today:false },
+      { ref:'Colosenses 3:23-24', desc:'Todo lo que hagáis, hacedlo de corazón, como para el Señor.', done:false, today:false },
+      { ref:'Miqueas 6:8', desc:'Hacer justicia, amar misericordia, y humillarte ante tu Dios.', done:false, today:false },
+    ],
+  },
+  generosidad: {
+    name: 'Generosidad', desc: 'Manos abiertas — 7 días',
+    items: [
+      { ref:'2 Corintios 9:6-15', desc:'Dios ama al dador alegre.', done:false, today:true },
+      { ref:'Malaquías 3:8-12', desc:'Traed todos los diezmos al alfolí, y probadme en esto.', done:false, today:false },
+      { ref:'Marcos 12:41-44', desc:'La ofrenda de la viuda: echó todo lo que tenía.', done:false, today:false },
+      { ref:'Hechos 20:35', desc:'Más bienaventurado es dar que recibir.', done:false, today:false },
+      { ref:'Proverbios 11:24-25', desc:'El alma generosa será prosperada.', done:false, today:false },
+      { ref:'Lucas 6:38', desc:'Dad, y se os dará; medida buena, apretada, remecida.', done:false, today:false },
+      { ref:'1 Timoteo 6:17-19', desc:'Que sean ricos en buenas obras, dadivosos, generosos.', done:false, today:false },
+    ],
+  },
+  salvacion: {
+    name: 'Salvación', desc: 'Qué significa ser salvo — 7 días',
+    items: [
+      { ref:'Romanos 3:21-26', desc:'Todos pecaron, y son justificados gratuitamente por su gracia.', done:false, today:true },
+      { ref:'Efesios 2:8-9', desc:'Por gracia sois salvos por medio de la fe; es don de Dios.', done:false, today:false },
+      { ref:'Romanos 6:23', desc:'La paga del pecado es muerte, mas la dádiva de Dios es vida eterna.', done:false, today:false },
+      { ref:'Romanos 10:9-13', desc:'Si confesares con tu boca y creyeres en tu corazón, serás salvo.', done:false, today:false },
+      { ref:'Tito 3:4-7', desc:'Nos salvó por su misericordia, no por obras de justicia.', done:false, today:false },
+      { ref:'Juan 5:24', desc:'El que oye mi palabra y cree, tiene vida eterna.', done:false, today:false },
+      { ref:'1 Juan 5:11-13', desc:'Para que sepáis que tenéis vida eterna.', done:false, today:false },
+    ],
+  },
+  resurrecion: {
+    name: 'Resurrección', desc: 'La esperanza que cambia todo — 7 días',
+    items: [
+      { ref:'Mateo 28:1-10', desc:'No está aquí, pues ha resucitado.', done:false, today:true },
+      { ref:'Lucas 24:13-35', desc:'El camino a Emaús: ¿no ardía nuestro corazón?', done:false, today:false },
+      { ref:'Juan 20:24-29', desc:'Tomás: bienaventurados los que no vieron y creyeron.', done:false, today:false },
+      { ref:'1 Corintios 15:1-11', desc:'Cristo murió por nuestros pecados, y resucitó al tercer día.', done:false, today:false },
+      { ref:'1 Corintios 15:50-58', desc:'¿Dónde está, oh muerte, tu aguijón?', done:false, today:false },
+      { ref:'Romanos 6:1-11', desc:'Sepultados con él, para que andemos en vida nueva.', done:false, today:false },
+      { ref:'1 Pedro 1:3-9', desc:'Nos hizo renacer para una esperanza viva.', done:false, today:false },
+    ],
+  },
+  mision: {
+    name: 'Misión', desc: 'Id y haced discípulos — 7 días',
+    items: [
+      { ref:'Mateo 28:16-20', desc:'La Gran Comisión: id y haced discípulos a todas las naciones.', done:false, today:true },
+      { ref:'Hechos 1:8', desc:'Me seréis testigos hasta lo último de la tierra.', done:false, today:false },
+      { ref:'Romanos 10:13-15', desc:'¿Cómo oirán sin haber quien les predique?', done:false, today:false },
+      { ref:'Isaías 6:1-8', desc:'Heme aquí, envíame a mí.', done:false, today:false },
+      { ref:'Mateo 9:35-38', desc:'La mies es mucha, mas los obreros pocos.', done:false, today:false },
+      { ref:'1 Pedro 3:15', desc:'Estad siempre preparados para presentar defensa de vuestra esperanza.', done:false, today:false },
+      { ref:'Apocalipsis 7:9-12', desc:'Una multitud de todas naciones, tribus, pueblos y lenguas.', done:false, today:false },
+    ],
+  },
+});
+
 let activePlan = 'proverbios';
 
 function renderPlanes() {
