@@ -1136,6 +1136,7 @@ function enterAppAfterRegister() {
   const email = document.getElementById('reg-email').value.trim();
   const fbUser = window._fbUser;
   currentUser = { email, name: email.split('@')[0], anonId: fbUser ? fbUser.uid.slice(0,8) : Security.generateAnonId(), firebase: true };
+  guardarSesionLocal(currentUser.email, currentUser.anonId);
   document.getElementById('main-app').style.display = 'flex';
   document.getElementById('screen-verify').classList.add('hidden');
   document.getElementById('screen-login').classList.add('hidden');
@@ -1143,17 +1144,52 @@ function enterAppAfterRegister() {
 }
 
 // Restaura la sesion cuando Firebase confirma que ya habia un usuario logueado
+// Marca local de sesión. Sirve para poder abrir la app SIN INTERNET:
+// si Firebase no responde (porque no hay conexión), usamos esto para entrar
+// igual y dejar disponibles las funciones que no necesitan red.
+const SESION_LOCAL_KEY = 'mc_sesion';
+
+function guardarSesionLocal(email, anonId) {
+  try {
+    localStorage.setItem(SESION_LOCAL_KEY, JSON.stringify({ email, anonId, at: Date.now() }));
+  } catch(e) {}
+}
+
+function leerSesionLocal() {
+  try {
+    const raw = localStorage.getItem(SESION_LOCAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function borrarSesionLocal() {
+  try { localStorage.removeItem(SESION_LOCAL_KEY); } catch(e) {}
+}
+
+// ¿Estamos trabajando sin conexión? Se usa para avisar en vez de dejar
+// botones que no responden.
+let modoOffline = false;
+
+function avisarSiOffline() {
+  if (!modoOffline && navigator.onLine) return false;
+  showToast('Necesitas conexión a internet para esto');
+  return true;
+}
+
 window.restoreSessionFromFirebase = function(fbUser) {
   if (!fbUser || currentUser) return;
   const mainApp = document.getElementById('main-app');
   if (!mainApp || mainApp.style.display === 'flex') return;
   const email = fbUser.email || '';
+  const anonId = fbUser.uid ? fbUser.uid.slice(0,8) : Security.generateAnonId();
   currentUser = {
     email,
     name: email.split('@')[0],
-    anonId: fbUser.uid ? fbUser.uid.slice(0,8) : Security.generateAnonId(),
+    anonId,
     firebase: true
   };
+  modoOffline = false;
+  guardarSesionLocal(email, anonId);
   mainApp.style.display = 'flex';
   ['login','register','verify'].forEach(s => {
     const el = document.getElementById('screen-' + s);
@@ -1161,6 +1197,50 @@ window.restoreSessionFromFirebase = function(fbUser) {
   });
   showTab('home', document.getElementById('nav-home'));
 };
+
+// Entrada sin conexión: si Firebase no cargó o no respondió, pero este
+// dispositivo ya tenía una sesión iniciada, dejamos entrar igual.
+// La Biblia, el diario, los versículos guardados y el ayuno funcionan
+// sin red; la comunidad y el chat avisan que necesitan internet.
+function entrarModoOffline() {
+  if (currentUser) return;
+  const guardada = leerSesionLocal();
+  if (!guardada) return; // nunca inició sesión en este dispositivo: no hay nada que restaurar
+
+  const mainApp = document.getElementById('main-app');
+  if (!mainApp || mainApp.style.display === 'flex') return;
+
+  currentUser = {
+    email: guardada.email || '',
+    name: (guardada.email || '').split('@')[0],
+    anonId: guardada.anonId || Security.generateAnonId(),
+    firebase: false
+  };
+  modoOffline = true;
+
+  mainApp.style.display = 'flex';
+  ['login','register','verify'].forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    if (el) el.classList.add('hidden');
+  });
+  showTab('home', document.getElementById('nav-home'));
+  setTimeout(() => showToast('Sin conexión — la Biblia y tu diario siguen disponibles'), 800);
+}
+
+// Si a los 3 segundos Firebase no dio señales de vida, asumimos que no hay
+// conexión (o que su SDK no cargó) e intentamos entrar con la sesión local.
+setTimeout(() => {
+  if (!currentUser && !window._fbUser) entrarModoOffline();
+}, 3000);
+
+// Si la conexión vuelve mientras la app está abierta, recargamos para
+// reconectar con Firebase en vez de dejar al usuario a medias.
+window.addEventListener('online', () => {
+  if (modoOffline) {
+    showToast('Conexión restaurada');
+    setTimeout(() => location.reload(), 1200);
+  }
+});
 
 async function doRegister() {
   const name = document.getElementById('reg-name').value.trim();
@@ -1245,6 +1325,7 @@ async function doLogin() {
       Security.resetAttempts();
       const fbUser = result.user || window._fbUser;
       currentUser = { email, name: email.split('@')[0], anonId: fbUser ? fbUser.uid.slice(0,8) : Security.generateAnonId(), firebase: true };
+  guardarSesionLocal(currentUser.email, currentUser.anonId);
           document.getElementById('main-app').style.display = 'flex';
       document.getElementById('screen-login').classList.add('hidden');
       showTab('home', document.getElementById('nav-home'));
@@ -1454,6 +1535,8 @@ function processDonation() {
 
 async function doLogout() {
   if (window.fbLogout) await window.fbLogout();
+  borrarSesionLocal(); // sin esto, la app volvería a entrar sola en modo offline
+  modoOffline = false;
   currentUser = null;
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('screen-login').classList.remove('hidden');
@@ -1541,6 +1624,7 @@ function escapeHtml(str) {
 
 async function sendChat() {
   if (chatLoading) return;
+  if (avisarSiOffline()) return; // el chat necesita el servidor
   loadChatLimit();
   if (chatMsgsToday >= CHAT_DAILY_LIMIT) {
     const msgs = document.getElementById('chat-msgs');
@@ -2045,13 +2129,32 @@ function renderHome() {
     <div class="mod-info"><div class="mod-name">💬 Síguenos y escríbenos</div><div class="mod-desc">Redes sociales y correo de contacto</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
-  <div style="text-align:center;margin-top:8px">
-    <button onclick="doLogout()" style="background:none;border:none;color:var(--text-dim);font-size:12px;cursor:pointer">Cerrar sesión</button>
+  <div style="text-align:center;margin-top:20px">
+    <button onclick="confirmarCerrarSesion()" style="background:none;border:0.5px solid var(--border);border-radius:20px;padding:9px 22px;color:var(--text-muted);font-size:13px;cursor:pointer">Cerrar sesión</button>
   </div>
-  <div style="text-align:center;margin-top:4px">
-    <button onclick="openDeleteAccount()" style="background:none;border:none;color:#c0392b;font-size:11px;cursor:pointer;opacity:0.7">Eliminar cuenta</button>
+  <div style="text-align:center;margin-top:28px;padding-top:20px;border-top:0.5px solid var(--border)">
+    <button onclick="openDeleteAccount()" style="background:none;border:none;color:#c0392b;font-size:11px;cursor:pointer;opacity:0.6">Eliminar cuenta permanentemente</button>
   </div>
   `;
+}
+
+// Confirmación antes de cerrar sesión. Sin esto, un toque accidental sacaba
+// al usuario y lo obligaba a escribir correo y contraseña otra vez.
+function confirmarCerrarSesion() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">Cerrar sesión</div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="font-size:13px;color:var(--text);line-height:1.6">
+      ¿Seguro que quieres cerrar sesión?
+    </div>
+    <div style="font-size:12px;color:var(--text-dim);line-height:1.6;margin-top:10px">
+      Tendrás que escribir tu correo y contraseña la próxima vez que entres.
+      Tu diario, versículos guardados y racha no se pierden.
+    </div>
+  </div>
+  <button class="btn-primary" onclick="doLogout()">Sí, cerrar sesión</button>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">Cancelar</button>`;
 }
 
 // ═══════════════════════════════════════
@@ -2443,6 +2546,8 @@ async function confirmDeleteAccount() {
   if (window.fbDeleteAccount) {
     const result = await window.fbDeleteAccount(pass);
     if (result.ok) {
+      borrarSesionLocal();
+      modoOffline = false;
       currentUser = null;
       document.getElementById('main-app').style.display = 'none';
       document.getElementById('screen-login').classList.remove('hidden');
@@ -2534,6 +2639,11 @@ async function loadCommunityPosts() {
 
   comunidadCursor = null;
   comunidadHayMas = false;
+
+  if (modoOffline || !navigator.onLine) {
+    feed.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:13px;line-height:1.6">Sin conexión a internet.<br>La comunidad estará disponible cuando vuelvas a conectarte.</div>`;
+    return;
+  }
 
   if (!window.loadFirebasePosts) {
     feed.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudo conectar con la comunidad en este momento.</div>`;
@@ -3270,6 +3380,7 @@ async function translatePost() {
 }
 
 async function submitPost() {
+  if (avisarSiOffline()) return; // publicar necesita Firestore
   const ta = document.getElementById('new-post');
   const text = ta.value.trim();
   if (!text) { showToast(getText('post_empty')); return; }
