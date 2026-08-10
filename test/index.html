@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://www.gstatic.com https://soft-art-11eb.elestacerc4eloim.workers.dev; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'">
 <meta name="theme-color" content="#3d2b1f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -492,7 +493,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="age-check">
       <input type="checkbox" id="age-confirm">
-      <label for="age-confirm" id="lbl-age">Confirmo que tengo 13 años o más y acepto los términos de uso y política de privacidad.</label>
+      <label for="age-confirm" id="lbl-age">Confirmo que tengo 18 años o más y acepto los términos de uso y la política de privacidad.</label>
+    </div>
+    <div class="age-check">
+      <input type="checkbox" id="sensitive-consent">
+      <label for="sensitive-consent" id="lbl-sensitive">Doy mi consentimiento expreso para que MenteClara trate mis <b>datos personales sensibles</b>: mis creencias religiosas y, si uso el tracker de ayuno, mis datos de salud. Puedo retirarlo eliminando mi cuenta.</label>
     </div>
     <button class="btn-primary" onclick="doRegister()" id="btn-register">Crear cuenta</button>
     <div class="auth-link"><span onclick="showScreen('login')" id="go-login-link">¿Ya tienes cuenta? Inicia sesión</span></div>
@@ -754,8 +759,8 @@ function openVersionBiblica() {
   <div class="mod-card" onclick="setBibleVersion('rv1909')" style="${bibleVersion==='rv1909' ? 'border-color:var(--gold)' : ''}">
     <div class="mod-info"><div class="mod-name">Reina Valera 1909${bibleVersion==='rv1909' ? ' ✓' : ''}</div><div class="mod-desc">Dominio público. Funciona sin conexión a internet.</div></div>
   </div>
-  <div class="mod-card" onclick="setBibleVersion('rvr1960')" style="${bibleVersion==='rvr1960' ? 'border-color:var(--gold)' : ''}">
-    <div class="mod-info"><div class="mod-name">Reina Valera 1960${bibleVersion==='rvr1960' ? ' ✓' : ''}</div><div class="mod-desc">Requiere conexión y clave de API.Bible configurada.</div></div>
+  <div class="mod-card" style="opacity:0.5;cursor:default">
+    <div class="mod-info"><div class="mod-name">Reina Valera 1960</div><div class="mod-desc">Próximamente — en trámite de licencia con Sociedades Bíblicas.</div></div>
   </div>
   <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
 }
@@ -776,7 +781,8 @@ const T = {
     reg_error_email:'Correo no válido.',
     reg_error_pass:'La contraseña debe tener al menos 8 caracteres.',
     reg_error_match:'Las contraseñas no coinciden.',
-    reg_error_age:'Debes confirmar que tienes 13 años o más.',
+    reg_error_age:'Debes confirmar que tienes 18 años o más.',
+    reg_error_sensitive:'Debes autorizar el tratamiento de tus datos sensibles para crear la cuenta.',
     reg_success:'¡Cuenta creada! Verifica tu correo.',
     post_empty:'Escribe tu petición primero.',
     post_blocked:'Contenido no permitido en la comunidad.',
@@ -828,7 +834,8 @@ const T = {
     reg_error_email:'Invalid email.',
     reg_error_pass:'Password must be at least 8 characters.',
     reg_error_match:'Passwords do not match.',
-    reg_error_age:'You must confirm you are 13 or older.',
+    reg_error_age:'You must confirm you are 18 or older.',
+    reg_error_sensitive:'You must consent to the processing of your sensitive data to create an account.',
     reg_success:'Account created! Check your email.',
     post_empty:'Write your prayer request first.',
     post_blocked:'Content not allowed in the community.',
@@ -873,7 +880,8 @@ const T = {
     reg_error_email:'E-mail inválido.',
     reg_error_pass:'A senha deve ter pelo menos 8 caracteres.',
     reg_error_match:'As senhas não coincidem.',
-    reg_error_age:'Você deve confirmar que tem 13 anos ou mais.',
+    reg_error_age:'Você deve confirmar que tem 18 anos ou mais.',
+    reg_error_sensitive:'Você deve autorizar o tratamento dos seus dados sensíveis para criar a conta.',
     reg_success:'Conta criada! Verifique seu e-mail.',
     post_empty:'Escreva seu pedido de oração primeiro.',
     post_blocked:'Conteúdo não permitido na comunidade.',
@@ -918,7 +926,8 @@ const T = {
     reg_error_email:'Email invalide.',
     reg_error_pass:'Le mot de passe doit avoir au moins 8 caractères.',
     reg_error_match:'Les mots de passe ne correspondent pas.',
-    reg_error_age:'Vous devez confirmer avoir 13 ans ou plus.',
+    reg_error_age:'Vous devez confirmer avoir 18 ans ou plus.',
+    reg_error_sensitive:'Vous devez consentir au traitement de vos données sensibles pour créer un compte.',
     reg_success:'Compte créé! Vérifiez votre email.',
     post_empty:'Écrivez votre requête de prière.',
     post_blocked:'Contenu non autorisé dans la communauté.',
@@ -963,7 +972,8 @@ const T = {
     reg_error_email:'Barua pepe si sahihi.',
     reg_error_pass:'Nywila inapaswa kuwa na herufi 8 au zaidi.',
     reg_error_match:'Nywila hazifanani.',
-    reg_error_age:'Lazima uthibitishe una miaka 13 au zaidi.',
+    reg_error_age:'Lazima uthibitishe una miaka 18 au zaidi.',
+    reg_error_sensitive:'Lazima ukubali uchakataji wa data zako nyeti ili kufungua akaunti.',
     reg_success:'Akaunti imeundwa! Angalia barua pepe yako.',
     post_empty:'Andika ombi lako la maombi.',
     post_blocked:'Maudhui hayaruhusiwi katika jamii.',
@@ -1008,7 +1018,8 @@ const T = {
     reg_error_email:'유효하지 않은 이메일입니다.',
     reg_error_pass:'비밀번호는 8자 이상이어야 합니다.',
     reg_error_match:'비밀번호가 일치하지 않습니다.',
-    reg_error_age:'13세 이상임을 확인해야 합니다.',
+    reg_error_age:'18세 이상임을 확인해야 합니다.',
+    reg_error_sensitive:'계정을 만들려면 민감정보 처리에 동의해야 합니다.',
     reg_success:'계정이 생성되었습니다! 이메일을 확인하세요.',
     post_empty:'먼저 기도 요청을 작성하세요.',
     post_blocked:'커뮤니티에서 허용되지 않는 콘텐츠입니다.',
@@ -1053,7 +1064,8 @@ const T = {
     reg_error_email:'邮箱无效。',
     reg_error_pass:'密码至少需要8个字符。',
     reg_error_match:'密码不匹配。',
-    reg_error_age:'您必须确认年满13岁。',
+    reg_error_age:'您必须确认年满18岁。',
+    reg_error_sensitive:'创建账户需同意处理您的敏感信息。',
     reg_success:'账户已创建！请查看您的邮箱。',
     post_empty:'请先写下您的祈祷请求。',
     post_blocked:'社区不允许此内容。',
@@ -1248,10 +1260,16 @@ async function doRegister() {
   const pass = document.getElementById('reg-pass').value;
   const pass2 = document.getElementById('reg-pass2').value;
   const ageOk = document.getElementById('age-confirm').checked;
+  const sensitiveOk = document.getElementById('sensitive-consent').checked;
   if (!Security.validateEmail(email)) { showError('reg-error', getText('reg_error_email')); return; }
   if (!Security.validatePassword(pass)) { showError('reg-error', getText('reg_error_pass')); return; }
   if (pass !== pass2) { showError('reg-error', getText('reg_error_match')); return; }
   if (!ageOk) { showError('reg-error', getText('reg_error_age')); return; }
+  // La LFPDPPP exige consentimiento expreso para datos sensibles (creencias
+  // religiosas, salud) y pone la carga de la prueba en el responsable, asi que
+  // guardamos evidencia con fecha y version del aviso aceptado.
+  if (!sensitiveOk) { showError('reg-error', getText('reg_error_sensitive')); return; }
+  window._consentimiento = { sensibles: true, fecha: new Date().toISOString(), avisoVersion: AVISO_PRIVACIDAD_VERSION };
   const btn = document.getElementById('btn-register');
   btn.textContent = '...'; btn.disabled = true;
   if (window.fbRegister) {
@@ -1743,7 +1761,17 @@ function getLevel(points) {
      recuperar lo que pagó sin volver a pagar.
    - Link para gestionar la suscripción: Google lo exige en sus políticas.
    ══════════════════════════════════════════════════════════ */
+// Version del aviso de privacidad aceptado. Subirla cada vez que cambie el
+// aviso: si cambia la finalidad hay que volver a pedir consentimiento.
+const AVISO_PRIVACIDAD_VERSION = '2026-08-09';
+
 const PAGOS_ACTIVO = false; // ← poner true solo después de completar PASOS_PENDIENTES.md
+
+// Donaciones: apagadas hasta que (1) el correo real de PayPal sustituya al
+// placeholder TU_PAYPAL_EMAIL y (2) se defina la figura legal. Google Play solo
+// exenta claramente de su facturacion las donaciones a entidades sin fines de
+// lucro registradas, asi que esto no se enciende sin esa decision tomada.
+const DONACIONES_ACTIVO = false;
 const WORKER_URL = 'https://soft-art-11eb.elestacerc4eloim.workers.dev';
 
 const PLANES_PAGO = [
@@ -2052,7 +2080,7 @@ function renderHome() {
   </div>
   <div class="mod-card" onclick="openBibleSearch()">
     <div class="mod-icon" style="background:#0a1a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-    <div class="mod-info"><div class="mod-name">Buscar versículo</div><div class="mod-desc">${bibleVersion === 'rv1909' ? 'Busca en la Reina Valera 1909' : 'Busca en toda la RVR1960 en vivo'}</div></div>
+    <div class="mod-info"><div class="mod-name">Buscar versículo</div><div class="mod-desc">Busca en la Reina Valera 1909</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
   <div class="mod-card" onclick="openNotificaciones()">
@@ -2060,11 +2088,12 @@ function renderHome() {
     <div class="mod-info"><div class="mod-name">Notificaciones diarias</div><div class="mod-desc">Versículo + meditación + oración a las 6AM y 6PM</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
+  ${DONACIONES_ACTIVO ? `
   <div class="mod-card" onclick="openDonaciones()">
     <div class="mod-icon" style="background:#1a0a1a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
     <div class="mod-info"><div class="mod-name">💝 Apoya MenteClara</div><div class="mod-desc">Donación voluntaria — mantén la app gratuita</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
-  </div>
+  </div>` : ''}
   <div class="mod-card" onclick="openAyuno()">
     <div class="mod-icon" style="background:#1a0a0a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><path d="M12 22V12m0 0C12 6 7 4 7 4s1 6 5 8zm0 0c0-6 5-8 5-8s-1 6-5 8z"/></svg></div>
     <div class="mod-info"><div class="mod-name">Tracker de ayuno</div><div class="mod-desc">${ayunoState.active ? '🕊 Ayuno en progreso' : 'Registra y guía tu ayuno'}</div></div>
@@ -3266,7 +3295,7 @@ function renderChat() {
   let msgs = chatHistory.map(m => `
   <div class="msg msg-${m.role}">
     <div class="msg-sender">${m.role === 'ai' ? getText('chat_ai_name') : getText('chat_you')}</div>
-    <div class="msg-bubble">${m.text}</div>
+    <div class="msg-bubble">${escapeHtml(m.text || '')}</div>
   </div>`).join('');
   return `
   <div class="section-label">${getText('chat_title')}</div>
@@ -3885,11 +3914,11 @@ function openDiary() {
   ${diaryEntries.map((e,i) => `
   <div class="card" style="margin-bottom:8px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <span style="font-size:11px;color:var(--text-dim)">${e.date}</span>
+      <span style="font-size:11px;color:var(--text-dim)">${escapeHtml(e.date || '')}</span>
       <span style="font-size:10px;padding:2px 8px;border-radius:10px;${e.status==='respondida'?'background:rgba(16,185,129,0.15);color:#6ee7b7':'background:rgba(232,201,122,0.15);color:var(--gold)'}">${e.status==='respondida'?'✓ Respondida':'⏳ Pendiente'}</span>
     </div>
-    <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:8px">${e.petition}</div>
-    ${e.answer ? `<div style="font-size:12px;color:#6ee7b7;border-left:2px solid #10b981;padding-left:8px;font-style:italic">${e.answer}</div>` : `
+    <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:8px">${escapeHtml(e.petition || '')}</div>
+    ${e.answer ? `<div style="font-size:12px;color:#6ee7b7;border-left:2px solid #10b981;padding-left:8px;font-style:italic">${escapeHtml(e.answer)}</div>` : `
     <input class="field-input" type="text" placeholder="Registra cómo Dios respondió..." style="margin-bottom:6px;font-size:12px;padding:7px 10px" id="answer-${i}">
     <button onclick="markAnswered(${i})" style="font-size:12px;background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text-muted);cursor:pointer">Marcar como respondida</button>`}
   </div>`).join('')}
@@ -4094,15 +4123,20 @@ const NotificationSystem = {
     if (this.eveningInterval) clearInterval(this.eveningInterval);
 
     // Verificar cada minuto si es hora de notificar
-    const check = setInterval(() => {
+    // F1 — antes esto se devolvia sin asignarse, asi que el clearInterval de
+    // arriba nunca limpiaba nada y cada llamada dejaba otro intervalo vivo.
+    // Ademas se guarda el ultimo disparo para no notificar dos veces el mismo
+    // minuto si el temporizador se desfasa.
+    this.morningInterval = setInterval(() => {
       const now = new Date();
       const h = now.getHours();
       const m = now.getMinutes();
-      if (h === 6 && m === 0) this.sendNotification('morning');
-      if (h === 18 && m === 0) this.sendNotification('evening');
+      const marca = `${now.toDateString()}-${h}`;
+      if (h === 6 && m === 0 && this._ultimo !== marca) { this._ultimo = marca; this.sendNotification('morning'); }
+      if (h === 18 && m === 0 && this._ultimo !== marca) { this._ultimo = marca; this.sendNotification('evening'); }
     }, 60000);
 
-    return check;
+    return this.morningInterval;
   },
 
   sendNotification(type) {
@@ -4395,13 +4429,37 @@ function openAyunoQuestionnaire(tipoId) {
     </div>
   </div>
   <div class="card" style="margin-bottom:14px">
+    <div style="font-size:12px;color:var(--text);font-weight:600;margin-bottom:8px">¿Vives o has vivido con un trastorno de la conducta alimentaria?</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-ghost" style="flex:1" onclick="bloquearAyunoPorTCA()">Sí</button>
+      <button class="btn-ghost" style="flex:1" onclick="document.getElementById('ayuno-consent-box').style.display='block';this.parentElement.parentElement.style.display='none'">No</button>
+    </div>
+  </div>
+  <div class="card" id="ayuno-consent-box" style="margin-bottom:14px;display:none">
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--text);cursor:pointer">
       <input type="checkbox" id="ayuno-consent-check" onchange="const b=document.getElementById('ayuno-start-btn');b.disabled=!this.checked;b.style.opacity=this.checked?'1':'0.4';">
-      <span>He leído esta información y decido comenzar este ayuno bajo mi propia responsabilidad. Entiendo que MenteClara no ofrece consejo médico.</span>
+      <span>He leído esta información y decido comenzar este ayuno bajo mi propia responsabilidad. Entiendo que MenteClara no ofrece consejo médico, y autorizo el tratamiento de los datos de salud que registre en esta función.</span>
     </label>
   </div>
   <button class="btn-primary" id="ayuno-start-btn" disabled style="opacity:0.4" onclick="startAyuno('${tipoId}')">Comenzar ayuno</button>
   <button class="btn-ghost" onclick="openAyuno()" style="margin-top:8px">← Cancelar</button>`;
+}
+
+// Si la persona indica antecedente de trastorno alimentario, la app no habilita
+// el ayuno. El ayuno intermitente puede reactivar conductas restrictivas, y no
+// tenemos forma de acompañar eso con seguridad desde una app.
+function bloquearAyunoPorTCA() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">Gracias por tu confianza</div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="font-size:13px;color:var(--text);line-height:1.6">
+      Preferimos no habilitar el ayuno en este caso. El ayuno puede reactivar patrones de restricción, y cuidarte importa más que cualquier función de la app.<br><br>
+      Puedes seguir usando todo lo demás: el devocional diario, la Biblia, el diario de oración y la comunidad.<br><br>
+      Si quieres hablar con alguien sobre tu relación con la comida, un profesional de salud puede acompañarte mucho mejor que nosotros.
+    </div>
+  </div>
+  <button class="btn-primary" onclick="showTab('home',document.getElementById('nav-home'))">Volver al inicio</button>`;
 }
 
 // ═══════════════════════════════════════
@@ -4457,8 +4515,8 @@ function openTestimonios() {
   ${testimonios.length === 0 ? '<div class="card"><div class="card-sub">Aún no has compartido testimonios.</div></div>' :
   testimonios.map(t => `
   <div class="card" style="margin-bottom:8px">
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${t.date}</div>
-    <div style="font-size:13px;color:var(--text)">${t.text}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${escapeHtml(t.date || '')}</div>
+    <div style="font-size:13px;color:var(--text)">${escapeHtml(t.text || '')}</div>
   </div>`).join('')}
   </div>
   <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
