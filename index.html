@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://www.gstatic.com https://soft-art-11eb.elestacerc4eloim.workers.dev; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'">
 <meta name="theme-color" content="#3d2b1f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -11,7 +12,7 @@
 <meta name="description" content="Tu espacio de oración, devoción y bienestar espiritual">
 <meta property="og:type" content="website">
 <meta property="og:title" content="MenteClara — Oración y Devoción">
-<meta property="og:description" content="Tu espacio de oración, devoción y bienestar espiritual con la Biblia. Devocional diario, comunidad de oración, chat bíblico con IA y más.">
+<meta property="og:description" content="Tu espacio de oración, devoción y bienestar espiritual con la Biblia. Devocional diario, planes de lectura, chat bíblico con IA y más.">
 <meta property="og:image" content="https://elestacerc4eloim-prog.github.io/menteclara/icon-512.png">
 <meta property="og:url" content="https://elestacerc4eloim-prog.github.io/menteclara/">
 <meta name="twitter:card" content="summary">
@@ -33,8 +34,8 @@ if ('serviceWorker' in navigator) {
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendEmailVerification, sendPasswordResetEmail, onAuthStateChanged, deleteUser, EmailAuthProvider, reauthenticateWithCredential, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { getFirestore, collection, addDoc, getDocs, getDoc, serverTimestamp, query, orderBy, where, limit, startAfter, doc, updateDoc, increment, setDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getAuth, signInAnonymously, signOut, onAuthStateChanged, deleteUser, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, collection, addDoc, getDoc, deleteDoc, serverTimestamp, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAH_DqIXCpuuVeJJ-H1smLKJMeLz-4hi-s",
@@ -60,55 +61,34 @@ try {
     }
   });
 
-  window.fbLogin = async (email, pass) => {
+  // Sesion anonima. No se pide correo ni contrasena: Firebase entrega un UID
+  // real, que es lo unico que el Worker necesita para dejar pasar al chat de IA.
+  // El UID sobrevive cerrar la app y reiniciar el telefono; solo se pierde si
+  // se borran los datos de la app o si el usuario elimina su cuenta.
+  window.fbEntrarAnonimo = async () => {
     try {
-      const c = await signInWithEmailAndPassword(auth, email, pass);
+      if (auth.currentUser) return { ok: true, user: auth.currentUser };
+      const c = await signInAnonymously(auth);
       return { ok: true, user: c.user };
-    } catch(e) { return { error: e.code }; }
-  };
-
-  window.fbRegister = async (email, pass) => {
-    try {
-      const c = await createUserWithEmailAndPassword(auth, email, pass);
-      await sendEmailVerification(c.user);
-      return { ok: true };
-    } catch(e) { return { error: e.code }; }
+    } catch(e) { return { error: e.code || 'unknown' }; }
   };
 
   window.fbLogout = async () => {
     try { await signOut(auth); } catch(e) {}
   };
 
-  window.fbResetPassword = async (email) => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-      return { ok: true };
-    } catch(e) { return { error: e.code }; }
-  };
-
-  window.fbDeleteAccount = async (password) => {
+  // Sin comunidad ya no hay publicaciones que borrar. Lo unico que esta cuenta
+  // dejo en el servidor es su registro de consentimiento, asi que se borra
+  // ANTES de deleteUser: despues ya no habria sesion con permisos para hacerlo.
+  // Las cuentas anonimas no necesitan reautenticacion.
+  window.fbDeleteAccount = async () => {
     try {
       const user = auth.currentUser;
       if (!user) return { error: 'no-user' };
-      if (password) {
-        const cred = EmailAuthProvider.credential(user.email, password);
-        await reauthenticateWithCredential(user, cred);
-      }
-      // H5 — antes de borrar la cuenta, borramos los posts de esta persona.
-      // La regla de Firestore permite borrar solo los posts cuyo anonId coincide
-      // con el propio uid, así que esto no puede tocar los de nadie más.
-      // Se hace ANTES de deleteUser porque después ya no habría sesión con
-      // permisos para borrarlos, y quedarían huérfanos para siempre.
-      try {
-        const mios = await getDocs(query(collection(db, 'posts'), where('anonId', '==', user.uid.slice(0, 8))));
-        const lote = writeBatch(db);
-        mios.forEach(d => lote.delete(d.ref));
-        if (!mios.empty) await lote.commit();
-      } catch (e) { /* si falla, seguimos: es preferible borrar la cuenta a dejarla a medias */ }
-
+      try { await deleteDoc(doc(db, 'consents', user.uid)); } catch(e) {}
       await deleteUser(user);
       return { ok: true };
-    } catch(e) { return { error: e.code }; }
+    } catch(e) { return { error: e.code || 'unknown' }; }
   };
 
   // Reporte de fallas: se guarda en Firestore para poder revisarlo después.
@@ -129,84 +109,56 @@ try {
     } catch(e) { return { error: e.code || 'unknown' }; }
   };
 
-  window.saveFirebasePost = async (text) => {
-    if (!auth.currentUser) return false;
+  // Requisito explicito de la politica de contenido de IA de Google: toda
+  // respuesta generada tiene que poder reportarse. Reusa bug_reports para no
+  // abrir otra coleccion ni otra regla.
+  window.fbReportarRespuestaIA = async (datos) => {
+    if (!auth.currentUser) return { error: 'no-auth' };
     try {
-      await addDoc(collection(db, 'posts'), {
-        text, anonId: auth.currentUser.uid.slice(0,8),
-        praying: 0, createdAt: serverTimestamp(), reported: false
+      const cuerpo = String(datos.texto || '').slice(0, 2000);
+      if (!cuerpo) return { error: 'vacio' };
+      await addDoc(collection(db, 'bug_reports'), {
+        texto: cuerpo,
+        pantalla: 'respuesta-ia',
+        anonId: auth.currentUser.uid.slice(0, 8),
+        dispositivo: datos.dispositivo || '',
+        version: datos.version || '',
+        createdAt: serverTimestamp(),
       });
-      return true;
-    } catch(e) { return false; }
-  };
-
-  // H10 — Antes tenía limit(20) fijo sin forma de avanzar: nadie veía el post 21.
-  // Ahora acepta un cursor (el último documento de la tanda anterior) y devuelve
-  // también si quedan más, para que el cliente pueda mostrar "Ver más".
-  window.loadFirebasePosts = async (cursor = null) => {
-    try {
-      const PAGINA = 20;
-      const partes = [collection(db, 'posts'), orderBy('createdAt','desc')];
-      if (cursor) partes.push(startAfter(cursor));
-      partes.push(limit(PAGINA + 1)); // pedimos uno extra para saber si hay más
-
-      const snap = await getDocs(query(...partes));
-      const docs = snap.docs;
-      const hayMas = docs.length > PAGINA;
-      const visibles = hayMas ? docs.slice(0, PAGINA) : docs;
-
-      return {
-        posts: visibles.map(d => ({ id: d.id, ...d.data() })),
-        cursor: visibles.length ? visibles[visibles.length - 1] : null,
-        hayMas,
-      };
-    } catch(e) { return null; }
-  };
-
-  window.prayFirebase = async (postId) => {
-    if (!auth.currentUser) return { error: 'no-auth' };
-    try {
-      const markRef = doc(db, 'posts', postId, 'prayedBy', auth.currentUser.uid);
-      const existing = await getDoc(markRef);
-      if (existing.exists()) return { already: true };
-      // Las reglas exigen que la marca y el incremento ocurran en la misma operación
-      // (getAfter), así que van juntos en un batch atómico.
-      const batch = writeBatch(db);
-      batch.set(markRef, { at: serverTimestamp() });
-      batch.update(doc(db, 'posts', postId), { praying: increment(1) });
-      await batch.commit();
-      return { ok: true };
-    } catch(e) {
-      return { error: e.code || 'unknown' };
-    }
-  };
-
-  window.hasPrayedFor = async (postId) => {
-    if (!auth.currentUser) return false;
-    try {
-      const markRef = doc(db, 'posts', postId, 'prayedBy', auth.currentUser.uid);
-      const snap = await getDoc(markRef);
-      return snap.exists();
-    } catch(e) { return false; }
-  };
-
-  window.reportFirebase = async (postId) => {
-    if (!auth.currentUser) return { error: 'no-auth' };
-    try {
-      const markRef = doc(db, 'posts', postId, 'reportedBy', auth.currentUser.uid);
-      const batch = writeBatch(db);
-      batch.set(markRef, { at: serverTimestamp() });
-      batch.update(doc(db, 'posts', postId), { reported: true });
-      await batch.commit();
       return { ok: true };
     } catch(e) { return { error: e.code || 'unknown' }; }
+  };
+
+  // Evidencia del consentimiento de datos sensibles. En Mexico la carga de la
+  // prueba recae en el responsable (LFPDPPP): sin registro guardado, no hay
+  // consentimiento que demostrar. Se guarda con la version del aviso aceptada
+  // para poder pedir consentimiento otra vez si el aviso cambia.
+  window.fbGuardarConsentimiento = async (avisoVersion) => {
+    if (!auth.currentUser) return { error: 'no-auth' };
+    try {
+      await setDoc(doc(db, 'consents', auth.currentUser.uid), {
+        sensibles: true,
+        avisoVersion: String(avisoVersion || ''),
+        createdAt: serverTimestamp(),
+      });
+      return { ok: true };
+    } catch(e) { return { error: e.code || 'unknown' }; }
+  };
+
+  window.fbLeerConsentimiento = async () => {
+    if (!auth.currentUser) return null;
+    try {
+      const s = await getDoc(doc(db, 'consents', auth.currentUser.uid));
+      return s.exists() ? s.data() : null;
+    } catch(e) { return null; }
   };
 
   console.log('Firebase conectado');
 } catch(e) {
   console.warn('Firebase error:', e.message);
-  window.fbLogin = null; window.fbRegister = null; window.fbLogout = null; window.fbResetPassword = null; window.fbDeleteAccount = null;
-  window.saveFirebasePost = null; window.loadFirebasePosts = null;
+  window.fbEntrarAnonimo = null; window.fbLogout = null; window.fbDeleteAccount = null;
+  window.fbReportarFalla = null; window.fbReportarRespuestaIA = null;
+  window.fbGuardarConsentimiento = null; window.fbLeerConsentimiento = null;
 }
 </script>
 <style>
@@ -245,7 +197,7 @@ body.dark-mode{
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;transition:background 0.2s,color 0.2s}
 
 /* AUTH SCREENS */
-.auth-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;background:var(--bg)}
+.auth-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:calc(24px + env(safe-area-inset-top,0px)) calc(24px + env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) calc(24px + env(safe-area-inset-left,0px));background:var(--bg)}
 .auth-logo{font-size:32px;font-weight:700;color:var(--gold);margin-bottom:8px;letter-spacing:1px}
 .auth-sub{font-size:14px;color:var(--text-muted);margin-bottom:32px;text-align:center}
 .auth-card{background:var(--card);border:0.5px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:360px}
@@ -276,7 +228,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* MAIN APP */
 .app{display:none;flex-direction:column;min-height:100vh}
-.header{background:var(--bg2);padding:16px 16px 12px;border-bottom:0.5px solid var(--border);position:sticky;top:0;z-index:10}
+.header{background:var(--bg2);padding:calc(16px + env(safe-area-inset-top,0px)) calc(16px + env(safe-area-inset-right,0px)) 12px calc(16px + env(safe-area-inset-left,0px));border-bottom:0.5px solid var(--border);position:sticky;top:0;z-index:10}
 .header-row{display:flex;justify-content:space-between;align-items:center}
 .app-name{font-size:18px;font-weight:700;color:var(--gold)}
 .header-actions{display:flex;gap:10px;align-items:center}
@@ -288,7 +240,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .verse-actions{display:flex;gap:8px}
 .verse-btn{background:rgba(255,255,255,0.08);border:0.5px solid var(--border);border-radius:20px;padding:6px 12px;color:var(--gold);font-size:12px;cursor:pointer}
 .verse-btn:hover{background:rgba(255,255,255,0.15)}
-.nav{display:flex;background:var(--bg2);border-top:0.5px solid var(--border);position:sticky;bottom:0;z-index:10}
+.nav{display:flex;background:var(--bg2);border-top:0.5px solid var(--border);position:sticky;bottom:0;z-index:10;padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
 .nav-btn{flex:1;padding:10px 4px 12px;font-size:10px;color:var(--text-dim);cursor:pointer;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color 0.2s}
 .nav-btn.active{color:var(--purple-light)}
 .nav-btn svg{width:20px;height:20px}
@@ -404,7 +356,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .timer-btn:hover{opacity:0.8}
 
 /* TOAST */
-.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.toast{position:fixed;top:calc(20px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none}
 .toast.show{opacity:1}
 
 /* MODAL */
@@ -421,99 +373,44 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .session-bar{background:rgba(239,68,68,0.1);border-bottom:0.5px solid rgba(239,68,68,0.3);padding:8px 16px;font-size:12px;color:#fca5a5;text-align:center;display:none}
 
 /* HIDDEN */
+.chips-sit{display:flex;flex-wrap:wrap;gap:8px}
+.chip-sit{background:var(--card);border:0.5px solid var(--border);border-radius:20px;padding:9px 14px;color:var(--text);font-size:13px;cursor:pointer;min-height:44px}
+.chip-sit:hover,.chip-sit:focus{border-color:var(--gold);color:var(--gold)}
+.chip-crisis{border-color:rgba(192,57,43,0.45);color:#c0392b}
+.chip-crisis:hover,.chip-crisis:focus{border-color:#c0392b;color:#c0392b}
+
+.report-ia{background:none;border:none;color:var(--text-dim);font-size:13px;cursor:pointer;padding:2px 6px;margin-top:2px;opacity:0.55;min-width:44px;min-height:32px}
+.report-ia:hover,.report-ia:focus{opacity:1;color:var(--red)}
+.report-ia:disabled{cursor:default;opacity:0.9}
+
+/* HIDDEN */
 .hidden{display:none!important}
 </style>
 </head>
 <body>
 
 <div class="toast" id="toast"></div>
-
-<div class="modal-overlay" id="report-modal">
-  <div class="modal">
-    <div class="modal-title" id="modal-title">Reportar contenido</div>
-    <div class="modal-text" id="modal-text">¿Estás seguro de que quieres reportar esta publicación? Será revisada en menos de 24 horas.</div>
-    <div class="modal-actions">
-      <button class="modal-cancel" onclick="closeModal()">Cancelar</button>
-      <button class="modal-confirm" onclick="confirmReport()">Reportar</button>
-    </div>
-  </div>
-</div>
-
-<!-- LOGIN -->
-<div class="auth-screen" id="screen-login">
+<!-- BIENVENIDA -->
+<div class="auth-screen" id="screen-welcome">
   <div class="auth-logo">✦ MenteClara</div>
-  <div class="auth-sub" id="login-sub">Tu espacio de oración y devoción</div>
+  <div class="auth-sub" id="welcome-sub">Tu espacio de oración y devoción</div>
   <div class="auth-card">
-    <div class="auth-title" id="login-title">Iniciar sesión</div>
-    <div class="auth-desc" id="login-desc">Accede a tu cuenta de forma segura</div>
-    <div class="error-msg" id="login-error"></div>
-    <div class="attempts-warning" id="attempts-warn"></div>
-    <label class="field-label" id="lbl-email">Correo electrónico</label>
-    <input class="field-input" type="email" id="login-email" placeholder="tu@correo.com">
-    <label class="field-label" id="lbl-pass">Contraseña</label>
-    <div style="position:relative">
-      <input class="field-input" type="password" id="login-pass" placeholder="••••••••" onkeyup="if(event.key==='Enter')doLogin()" style="padding-right:42px">
-      <button onclick="togglePassVisibility('login-pass',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
-    </div>
-    <button class="btn-primary" onclick="doLogin()" id="btn-login">Entrar</button>
-    <div style="text-align:center;margin-top:6px">
-      <a href="#" onclick="doPasswordReset();return false;" id="link-forgot-pass" style="font-size:12px;color:var(--text-dim);text-decoration:underline">¿Olvidaste tu contraseña?</a>
-    </div>
-    <button class="btn-ghost" onclick="showScreen('register')" id="btn-go-register">Crear cuenta nueva</button>
-    <div class="security-note">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      <p id="sec-note-login">Conexión protegida con HTTPS. Tu contraseña la gestiona Firebase Authentication.</p>
-    </div>
-  </div>
-</div>
-
-<!-- REGISTER -->
-<div class="auth-screen hidden" id="screen-register">
-  <div class="auth-logo">✦ MenteClara</div>
-  <div class="auth-card">
-    <div class="auth-title" id="reg-title">Crear cuenta</div>
-    <div class="auth-desc" id="reg-desc">Únete a la comunidad de oración</div>
-    <div class="error-msg" id="reg-error"></div>
-    <div class="success-msg" id="reg-success"></div>
-    <label class="field-label" id="lbl-name">Nombre (solo tú lo verás)</label>
-    <input class="field-input" type="text" id="reg-name" placeholder="Tu nombre">
-    <label class="field-label" id="lbl-reg-email">Correo electrónico</label>
-    <input class="field-input" type="email" id="reg-email" placeholder="tu@correo.com">
-    <label class="field-label" id="lbl-reg-pass">Contraseña</label>
-    <div style="position:relative">
-      <input class="field-input" type="password" id="reg-pass" placeholder="Mínimo 8 caracteres" oninput="checkStrength(this.value)" style="padding-right:42px">
-      <button onclick="togglePassVisibility('reg-pass',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
-    </div>
-    <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
-    <label class="field-label" id="lbl-reg-pass2">Confirmar contraseña</label>
-    <div style="position:relative">
-      <input class="field-input" type="password" id="reg-pass2" placeholder="Repite tu contraseña" style="padding-right:42px">
-      <button onclick="togglePassVisibility('reg-pass2',this)" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">👁</button>
-    </div>
+    <div class="auth-title" id="welcome-title">Bienvenido</div>
+    <div class="auth-desc" id="welcome-desc">No pedimos correo ni contraseña. Marca las dos casillas y entra.</div>
+    <div class="error-msg" id="welcome-error"></div>
     <div class="age-check">
       <input type="checkbox" id="age-confirm">
-      <label for="age-confirm" id="lbl-age">Confirmo que tengo 13 años o más y acepto los términos de uso y política de privacidad.</label>
+      <label for="age-confirm" id="lbl-age">Confirmo que tengo 13 años o más y acepto los <a href="terminos.html" target="_blank" rel="noopener" style="color:var(--gold)">términos de uso</a> y el <a href="privacy_1.html" target="_blank" rel="noopener" style="color:var(--gold)">aviso de privacidad</a>.</label>
     </div>
-    <button class="btn-primary" onclick="doRegister()" id="btn-register">Crear cuenta</button>
-    <div class="auth-link"><span onclick="showScreen('login')" id="go-login-link">¿Ya tienes cuenta? Inicia sesión</span></div>
+    <div class="age-check">
+      <input type="checkbox" id="sensitive-consent">
+      <label for="sensitive-consent" id="lbl-sensitive">Doy mi consentimiento expreso para que MenteClara trate un <b>dato personal sensible</b>: mis creencias religiosas, que se deducen del solo hecho de usar la app. Puedo retirarlo eliminando mi cuenta.</label>
+    </div>
+    <button class="btn-primary" onclick="entrarAnonimo()" id="btn-entrar">Entrar</button>
     <div class="security-note">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      <p id="sec-note-reg">Tu correo nunca será compartido. El anonimato en la comunidad es total.</p>
+      <p id="sec-note-welcome">No pedimos tu nombre, tu correo ni tu teléfono. Tu diario, tus versículos guardados y el tracker de ayuno se quedan en este teléfono y nunca se envían a ningún servidor.</p>
     </div>
-  </div>
-</div>
-
-<!-- VERIFY EMAIL -->
-<div class="auth-screen hidden" id="screen-verify">
-  <div class="auth-logo">✦ MenteClara</div>
-  <div class="auth-card">
-    <div style="text-align:center;margin-bottom:16px">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#e8c97a" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-    </div>
-    <div class="auth-title" style="text-align:center" id="verify-title">Verifica tu correo</div>
-    <div class="auth-desc" style="text-align:center" id="verify-desc">Hemos enviado un enlace de verificación a tu correo. Por favor revísalo antes de continuar.</div>
-    <button class="btn-primary" onclick="enterAppAfterRegister();showToast(getText('email_verified'))" id="btn-verified">Ya verifiqué mi correo</button>
-    <button class="btn-ghost" onclick="showScreen('login')" id="btn-back-login">Volver al inicio</button>
   </div>
 </div>
 
@@ -564,10 +461,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="nav-btn active" onclick="showTab('home',this)" id="nav-home">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
       <span id="nav-lbl-home">Inicio</span>
-    </button>
-    <button class="nav-btn" onclick="showTab('comunidad',this)" id="nav-comunidad">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      <span id="nav-lbl-com">Comunidad</span>
     </button>
     <!-- Pueblos y Planes: ya tienen datos reales (pueblos array + 5 planes de lectura). Los 15 temas restantes de "categories" quedan sin chip hasta que se les agregue contenido — renderPlanes() los filtra automáticamente. -->
     <button class="nav-btn" onclick="showTab('pueblos',this)" id="nav-pueblos">
@@ -628,10 +521,6 @@ const AppStats = {
 
 // Update streak on app load
 function getStreak() { return AppStats.updateStreak(); }
-function getPrayingCount() {
-  const base = communityPosts.reduce((sum, p) => sum + (p.praying || 0), 0);
-  return base + AppStats.prayingToday;
-}
 function renderStreakDays() {
   return AppStats.getStreakDays().map(d =>
     '<div class="streak-day ' + d.type + '">' + d.label + '</div>'
@@ -641,9 +530,7 @@ function renderStreakDays() {
 // Update stats every 60 seconds
 setInterval(() => {
   const sn = document.getElementById('stat-streak-num');
-  const pn = document.getElementById('stat-praying-num');
   if (sn) sn.textContent = getStreak();
-  if (pn) pn.textContent = getPrayingCount();
 }, 60000);
 
 // ═══════════════════════════════════════
@@ -754,8 +641,8 @@ function openVersionBiblica() {
   <div class="mod-card" onclick="setBibleVersion('rv1909')" style="${bibleVersion==='rv1909' ? 'border-color:var(--gold)' : ''}">
     <div class="mod-info"><div class="mod-name">Reina Valera 1909${bibleVersion==='rv1909' ? ' ✓' : ''}</div><div class="mod-desc">Dominio público. Funciona sin conexión a internet.</div></div>
   </div>
-  <div class="mod-card" onclick="setBibleVersion('rvr1960')" style="${bibleVersion==='rvr1960' ? 'border-color:var(--gold)' : ''}">
-    <div class="mod-info"><div class="mod-name">Reina Valera 1960${bibleVersion==='rvr1960' ? ' ✓' : ''}</div><div class="mod-desc">Requiere conexión y clave de API.Bible configurada.</div></div>
+  <div class="mod-card" style="opacity:0.5;cursor:default">
+    <div class="mod-info"><div class="mod-name">Reina Valera 1960</div><div class="mod-desc">Próximamente — en trámite de licencia con Sociedades Bíblicas.</div></div>
   </div>
   <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
 }
@@ -777,6 +664,7 @@ const T = {
     reg_error_pass:'La contraseña debe tener al menos 8 caracteres.',
     reg_error_match:'Las contraseñas no coinciden.',
     reg_error_age:'Debes confirmar que tienes 13 años o más.',
+    reg_error_sensitive:'Debes autorizar el tratamiento de tus datos sensibles para entrar.',
     reg_success:'¡Cuenta creada! Verifica tu correo.',
     post_empty:'Escribe tu petición primero.',
     post_blocked:'Contenido no permitido en la comunidad.',
@@ -810,13 +698,13 @@ const T = {
     chat_title:'Chat IA — apoyo espiritual',
     chat_placeholder:'Escribe aquí... (solo texto)',
     chat_send:'Enviar',
-    chat_disclaimer:'Esta IA no sustituye consejería pastoral o psicológica profesional.',
+    chat_disclaimer:'Herramienta de estudio bíblico con IA. Las respuestas pueden contener errores: verifícalas en tu Biblia. No sustituye consejería pastoral ni atención profesional de salud. En crisis, Línea de la Vida: 800 911 2000.',
     chat_ai_name:'IA Bíblica',
     chat_you:'Tú',
     chat_thinking:'Pensando...',
     // Security
     sec_panel_title:'Tu seguridad activa',
-    sec_items:['Conexión protegida con HTTPS','Contraseña gestionada por Firebase Authentication','Nombre de usuario oculto en la comunidad (solo ID anónimo)','Sin venta de datos a terceros','Filtro automático de palabras + reporte manual de contenido','Puedes solicitar la eliminación de tu cuenta y datos'],
+    sec_items:['Conexión protegida con HTTPS','Cuenta anónima: sin correo, sin nombre, sin teléfono','Tu diario y tu ayuno nunca salen del teléfono','Sin venta de datos a terceros','Puedes reportar cualquier respuesta de la IA','Puedes eliminar tu cuenta y tus datos desde la app'],
   },
   en: {
     saved:'Verse saved', shared:'Shared', email_verified:'Email verified!',
@@ -829,6 +717,7 @@ const T = {
     reg_error_pass:'Password must be at least 8 characters.',
     reg_error_match:'Passwords do not match.',
     reg_error_age:'You must confirm you are 13 or older.',
+    reg_error_sensitive:'You must consent to the processing of your sensitive data to continue.',
     reg_success:'Account created! Check your email.',
     post_empty:'Write your prayer request first.',
     post_blocked:'Content not allowed in the community.',
@@ -856,12 +745,12 @@ const T = {
     chat_title:'AI Chat — spiritual support',
     chat_placeholder:'Type here... (text only)',
     chat_send:'Send',
-    chat_disclaimer:'This AI does not replace professional pastoral or psychological counseling.',
+    chat_disclaimer:'AI Bible study tool. Responses may contain errors: check them in your Bible. Not a substitute for pastoral care or professional health support. In a crisis, contact your local emergency line.',
     chat_ai_name:'Biblical AI',
     chat_you:'You',
     chat_thinking:'Thinking...',
     sec_panel_title:'Your active security',
-    sec_items:['Connection secured with HTTPS','Password managed by Firebase Authentication','Username hidden in community (anonymous ID only)','No data sold to third parties','Automatic word filter + manual content reporting','You can request deletion of your account and data'],
+    sec_items:['Connection secured with HTTPS','Anonymous account: no email, no name, no phone','Your journal and fasting data never leave your phone','No data sold to third parties','You can report any AI response','You can delete your account and data from the app'],
   },
   pt: {
     saved:'Versículo salvo', shared:'Compartilhado', email_verified:'E-mail verificado!',
@@ -874,6 +763,7 @@ const T = {
     reg_error_pass:'A senha deve ter pelo menos 8 caracteres.',
     reg_error_match:'As senhas não coincidem.',
     reg_error_age:'Você deve confirmar que tem 13 anos ou mais.',
+    reg_error_sensitive:'Você deve autorizar o tratamento dos seus dados sensíveis para entrar.',
     reg_success:'Conta criada! Verifique seu e-mail.',
     post_empty:'Escreva seu pedido de oração primeiro.',
     post_blocked:'Conteúdo não permitido na comunidade.',
@@ -901,12 +791,12 @@ const T = {
     chat_title:'Chat IA — apoio espiritual',
     chat_placeholder:'Digite aqui... (somente texto)',
     chat_send:'Enviar',
-    chat_disclaimer:'Esta IA não substitui aconselhamento pastoral ou psicológico profissional.',
+    chat_disclaimer:'Ferramenta de estudo bíblico com IA. As respostas podem conter erros: confira na sua Bíblia. Não substitui aconselhamento pastoral nem atendimento profissional de saúde. Em crise, procure a linha de emergência local.',
     chat_ai_name:'IA Bíblica',
     chat_you:'Você',
     chat_thinking:'Pensando...',
     sec_panel_title:'Sua segurança ativa',
-    sec_items:['Conexão protegida com HTTPS','Senha gerenciada pelo Firebase Authentication','Nome de usuário oculto na comunidade (apenas ID anônimo)','Sem venda de dados a terceiros','Filtro automático de palavras + denúncia manual de conteúdo','Você pode solicitar a exclusão da sua conta e dados'],
+    sec_items:['Conexão protegida com HTTPS','Conta anônima: sem e-mail, sem nome, sem telefone','Seu diário e seu jejum nunca saem do celular','Sem venda de dados a terceiros','Você pode denunciar qualquer resposta da IA','Você pode excluir sua conta e seus dados pelo app'],
   },
   fr: {
     saved:'Verset sauvegardé', shared:'Partagé', email_verified:'Email vérifié!',
@@ -919,6 +809,7 @@ const T = {
     reg_error_pass:'Le mot de passe doit avoir au moins 8 caractères.',
     reg_error_match:'Les mots de passe ne correspondent pas.',
     reg_error_age:'Vous devez confirmer avoir 13 ans ou plus.',
+    reg_error_sensitive:'Vous devez consentir au traitement de vos données sensibles pour continuer.',
     reg_success:'Compte créé! Vérifiez votre email.',
     post_empty:'Écrivez votre requête de prière.',
     post_blocked:'Contenu non autorisé dans la communauté.',
@@ -964,6 +855,7 @@ const T = {
     reg_error_pass:'Nywila inapaswa kuwa na herufi 8 au zaidi.',
     reg_error_match:'Nywila hazifanani.',
     reg_error_age:'Lazima uthibitishe una miaka 13 au zaidi.',
+    reg_error_sensitive:'Lazima ukubali uchakataji wa data zako nyeti ili kuendelea.',
     reg_success:'Akaunti imeundwa! Angalia barua pepe yako.',
     post_empty:'Andika ombi lako la maombi.',
     post_blocked:'Maudhui hayaruhusiwi katika jamii.',
@@ -1009,6 +901,7 @@ const T = {
     reg_error_pass:'비밀번호는 8자 이상이어야 합니다.',
     reg_error_match:'비밀번호가 일치하지 않습니다.',
     reg_error_age:'13세 이상임을 확인해야 합니다.',
+    reg_error_sensitive:'계속하려면 민감정보 처리에 동의해야 합니다.',
     reg_success:'계정이 생성되었습니다! 이메일을 확인하세요.',
     post_empty:'먼저 기도 요청을 작성하세요.',
     post_blocked:'커뮤니티에서 허용되지 않는 콘텐츠입니다.',
@@ -1054,6 +947,7 @@ const T = {
     reg_error_pass:'密码至少需要8个字符。',
     reg_error_match:'密码不匹配。',
     reg_error_age:'您必须确认年满13岁。',
+    reg_error_sensitive:'继续使用需同意处理您的敏感信息。',
     reg_success:'账户已创建！请查看您的邮箱。',
     post_empty:'请先写下您的祈祷请求。',
     post_blocked:'社区不允许此内容。',
@@ -1125,77 +1019,154 @@ function setLang(l) {
 const users = {};
 let currentUser = null;
 
-function showScreen(id) {
-  ['login','register','verify'].forEach(s => {
-    const el = document.getElementById('screen-' + s);
-    el.classList.toggle('hidden', s !== id);
-  });
+
+
+// Restaura la sesion cuando Firebase confirma que ya habia un usuario logueado
+// Marca local de sesión. Sirve para poder abrir la app SIN INTERNET:
+// si Firebase no responde (porque no hay conexión), usamos esto para entrar
+// igual y dejar disponibles las funciones que no necesitan red.
+const SESION_LOCAL_KEY = 'mc_sesion';
+
+function guardarSesionLocal(anonId) {
+  try {
+    localStorage.setItem(SESION_LOCAL_KEY, JSON.stringify({ anonId, at: Date.now() }));
+  } catch(e) {}
 }
 
-function enterAppAfterRegister() {
-  const email = document.getElementById('reg-email').value.trim();
-  const fbUser = window._fbUser;
-  currentUser = { email, name: email.split('@')[0], anonId: fbUser ? fbUser.uid.slice(0,8) : Security.generateAnonId(), firebase: true };
+// ─── Consentimiento de datos sensibles ─────────────────────────────────
+// Firestore guarda la evidencia (es lo que vale ante la autoridad); esta marca
+// local es solo la puerta de la interfaz. Si AVISO_PRIVACIDAD_VERSION cambia,
+// la marca deja de coincidir y se vuelve a pedir el consentimiento.
+const CONSENT_LOCAL_KEY = 'mc_consent';
+
+function consentimientoVigente() {
+  try {
+    const raw = localStorage.getItem(CONSENT_LOCAL_KEY);
+    if (!raw) return false;
+    return JSON.parse(raw).avisoVersion === AVISO_PRIVACIDAD_VERSION;
+  } catch(e) { return false; }
+}
+
+function guardarConsentimientoLocal() {
+  try {
+    localStorage.setItem(CONSENT_LOCAL_KEY, JSON.stringify({
+      sensibles: true,
+      fecha: new Date().toISOString(),
+      avisoVersion: AVISO_PRIVACIDAD_VERSION,
+    }));
+  } catch(e) {}
+}
+
+function abrirApp(anonId, online) {
+  currentUser = { anonId: anonId || Security.generateAnonId(), firebase: !!online };
+  guardarSesionLocal(currentUser.anonId);
+  const bienvenida = document.getElementById('screen-welcome');
+  if (bienvenida) bienvenida.classList.add('hidden');
   document.getElementById('main-app').style.display = 'flex';
-  document.getElementById('screen-verify').classList.add('hidden');
-  document.getElementById('screen-login').classList.add('hidden');
   showTab('home', document.getElementById('nav-home'));
 }
 
-// Restaura la sesion cuando Firebase confirma que ya habia un usuario logueado
+// Entrada anónima. No hay correo, contraseña ni verificación: Firebase crea un
+// UID y ese UID es lo que el Worker valida para dejar pasar al chat de IA.
+async function entrarAnonimo() {
+  if (!document.getElementById('age-confirm').checked) {
+    showError('welcome-error', getText('reg_error_age')); return;
+  }
+  if (!document.getElementById('sensitive-consent').checked) {
+    showError('welcome-error', getText('reg_error_sensitive')); return;
+  }
+
+  const btn = document.getElementById('btn-entrar');
+  btn.textContent = '...'; btn.disabled = true;
+
+  let anonId = null;
+  if (window.fbEntrarAnonimo) {
+    const r = await window.fbEntrarAnonimo();
+    if (r && r.ok && r.user) anonId = r.user.uid.slice(0, 8);
+  }
+
+  btn.textContent = 'Entrar'; btn.disabled = false;
+
+  if (!anonId) {
+    showError('welcome-error', 'No se pudo conectar. Revisa tu internet e intenta de nuevo.');
+    return;
+  }
+
+  guardarConsentimientoLocal();
+  if (window.fbGuardarConsentimiento) {
+    // No se espera a que termine: la marca local ya quedó y el chat no depende
+    // de esto. Si falla, se vuelve a escribir la próxima vez que abra la app.
+    window.fbGuardarConsentimiento(AVISO_PRIVACIDAD_VERSION);
+  }
+  modoOffline = false;
+  abrirApp(anonId, true);
+}
+
+function leerSesionLocal() {
+  try {
+    const raw = localStorage.getItem(SESION_LOCAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function borrarSesionLocal() {
+  try { localStorage.removeItem(SESION_LOCAL_KEY); } catch(e) {}
+}
+
+// ¿Estamos trabajando sin conexión? Se usa para avisar en vez de dejar
+// botones que no responden.
+let modoOffline = false;
+
+function avisarSiOffline() {
+  if (!modoOffline && navigator.onLine) return false;
+  showToast('Necesitas conexión a internet para esto');
+  return true;
+}
+
 window.restoreSessionFromFirebase = function(fbUser) {
   if (!fbUser || currentUser) return;
   const mainApp = document.getElementById('main-app');
   if (!mainApp || mainApp.style.display === 'flex') return;
-  const email = fbUser.email || '';
-  currentUser = {
-    email,
-    name: email.split('@')[0],
-    anonId: fbUser.uid ? fbUser.uid.slice(0,8) : Security.generateAnonId(),
-    firebase: true
-  };
-  mainApp.style.display = 'flex';
-  ['login','register','verify'].forEach(s => {
-    const el = document.getElementById('screen-' + s);
-    if (el) el.classList.add('hidden');
-  });
-  showTab('home', document.getElementById('nav-home'));
+  // Hay sesión, pero si el aviso de privacidad cambió de versión hay que volver
+  // a pedir el consentimiento antes de dejar entrar.
+  if (!consentimientoVigente()) return;
+  modoOffline = false;
+  abrirApp(fbUser.uid ? fbUser.uid.slice(0,8) : Security.generateAnonId(), true);
 };
 
-async function doRegister() {
-  const name = document.getElementById('reg-name').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const pass = document.getElementById('reg-pass').value;
-  const pass2 = document.getElementById('reg-pass2').value;
-  const ageOk = document.getElementById('age-confirm').checked;
-  if (!Security.validateEmail(email)) { showError('reg-error', getText('reg_error_email')); return; }
-  if (!Security.validatePassword(pass)) { showError('reg-error', getText('reg_error_pass')); return; }
-  if (pass !== pass2) { showError('reg-error', getText('reg_error_match')); return; }
-  if (!ageOk) { showError('reg-error', getText('reg_error_age')); return; }
-  const btn = document.getElementById('btn-register');
-  btn.textContent = '...'; btn.disabled = true;
-  if (window.fbRegister) {
-    const result = await window.fbRegister(email, pass);
-    btn.textContent = 'Crear cuenta'; btn.disabled = false;
-    if (result.ok) {
-      const suc = document.getElementById('reg-success');
-      suc.textContent = getText('reg_success');
-      suc.style.display = 'block';
-      setTimeout(() => showScreen('verify'), 1500);
-      return;
-    } else if (result.error !== 'demo') {
-      const msgs = { 'auth/email-already-in-use':'Este correo ya está registrado.', 'auth/weak-password': getText('reg_error_pass') };
-      showError('reg-error', msgs[result.error] || 'Error al crear cuenta. Intenta de nuevo.');
-      return;
-    }
-  }
-  btn.textContent = 'Crear cuenta'; btn.disabled = false;
-  // Demo fallback
-  const suc = document.getElementById('reg-success');
-  suc.textContent = getText('reg_success') + ' (modo demo)';
-  suc.style.display = 'block';
-  setTimeout(() => showScreen('verify'), 1500);
+// Entrada sin conexión: si Firebase no cargó o no respondió, pero este
+// dispositivo ya tenía una sesión iniciada, dejamos entrar igual.
+// La Biblia, el diario, los versículos guardados y el ayuno funcionan
+// sin red; la comunidad y el chat avisan que necesitan internet.
+function entrarModoOffline() {
+  if (currentUser) return;
+  const guardada = leerSesionLocal();
+  if (!guardada) return; // nunca entró en este dispositivo: no hay nada que restaurar
+  if (!consentimientoVigente()) return; // sin conexión no se puede registrar el consentimiento
+
+  const mainApp = document.getElementById('main-app');
+  if (!mainApp || mainApp.style.display === 'flex') return;
+
+  modoOffline = true;
+  abrirApp(guardada.anonId, false);
+  setTimeout(() => showToast('Sin conexión — la Biblia y tu diario siguen disponibles'), 800);
 }
+
+// Si a los 3 segundos Firebase no dio señales de vida, asumimos que no hay
+// conexión (o que su SDK no cargó) e intentamos entrar con la sesión local.
+setTimeout(() => {
+  if (!currentUser && !window._fbUser) entrarModoOffline();
+}, 3000);
+
+// Si la conexión vuelve mientras la app está abierta, recargamos para
+// reconectar con Firebase en vez de dejar al usuario a medias.
+window.addEventListener('online', () => {
+  if (modoOffline) {
+    showToast('Conexión restaurada');
+    setTimeout(() => location.reload(), 1200);
+  }
+});
+
 
 function showError(id, msg) {
   const el = document.getElementById(id);
@@ -1204,106 +1175,9 @@ function showError(id, msg) {
   setTimeout(() => el.style.display = 'none', 4000);
 }
 
-function togglePassVisibility(fieldId, btn) {
-  const field = document.getElementById(fieldId);
-  if (!field) return;
-  field.type = field.type === 'password' ? 'text' : 'password';
-  btn.textContent = field.type === 'password' ? '👁' : '🙈';
-}
 
-function checkStrength(pass) {
-  const fill = document.getElementById('strength-fill');
-  let score = 0;
-  if (pass.length >= 8) score++;
-  if (/[A-Z]/.test(pass)) score++;
-  if (/[0-9]/.test(pass)) score++;
-  if (/[^A-Za-z0-9]/.test(pass)) score++;
-  const colors = ['#ef4444','#f97316','#eab308','#10b981'];
-  const widths = ['25%','50%','75%','100%'];
-  fill.style.width = pass.length ? widths[score - 1] || '10%' : '0';
-  fill.style.background = pass.length ? colors[score - 1] || '#ef4444' : 'transparent';
-}
 
-async function doLogin() {
-  const rate = Security.checkRateLimit();
-  if (rate.locked) {
-    showError('login-error', getText('login_locked').replace('{sec}', rate.remaining));
-    return;
-  }
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  if (!email || !pass) { showError('login-error', getText('login_empty')); return; }
 
-  const btn = document.getElementById('btn-login');
-  btn.textContent = '...';
-  btn.disabled = true;
-
-  // Try Firebase first
-  if (window.fbLogin) {
-    const result = await window.fbLogin(email, pass);
-    if (result.ok) {
-      Security.resetAttempts();
-      const fbUser = result.user || window._fbUser;
-      currentUser = { email, name: email.split('@')[0], anonId: fbUser ? fbUser.uid.slice(0,8) : Security.generateAnonId(), firebase: true };
-          document.getElementById('main-app').style.display = 'flex';
-      document.getElementById('screen-login').classList.add('hidden');
-      showTab('home', document.getElementById('nav-home'));
-      btn.textContent = 'Entrar'; btn.disabled = false;
-      return;
-    } else if (result.error !== 'demo' && result.error !== 'auth/invalid-credential' && result.error !== 'auth/user-not-found') {
-      btn.textContent = 'Entrar'; btn.disabled = false;
-      const remaining = Security.recordFailedAttempt();
-      showError('login-error', getText('login_error'));
-      return;
-    }
-  }
-
-  btn.textContent = 'Entrar'; btn.disabled = false;
-
-  // Demo fallback — acepta cualquier correo válido y contraseña de 8+ caracteres
-  if (Security.validateEmail(email) && pass.length >= 8) {
-    Security.resetAttempts();
-    currentUser = { email, name: email.split('@')[0], anonId: Security.generateAnonId(), firebase: false };
-      document.getElementById('main-app').style.display = 'flex';
-    document.getElementById('screen-login').classList.add('hidden');
-    showTab('home', document.getElementById('nav-home'));
-  } else {
-    showError('login-error', pass.length < 8 ? 'La contraseña debe tener al menos 8 caracteres.' : getText('login_error'));
-  }
-}
-
-async function doPasswordReset() {
-  const emailInput = document.getElementById('login-email');
-  let email = emailInput.value.trim();
-  if (!email) {
-    email = (prompt('Escribe tu correo electrónico para recuperar tu contraseña:') || '').trim();
-    if (!email) return;
-  }
-  if (!Security.validateEmail(email)) {
-    showError('login-error', 'Escribe un correo electrónico válido.');
-    return;
-  }
-  const link = document.getElementById('link-forgot-pass');
-  const originalText = link.textContent;
-  link.textContent = 'Enviando...';
-
-  if (window.fbResetPassword) {
-    const result = await window.fbResetPassword(email);
-    link.textContent = originalText;
-    const el = document.getElementById('login-error');
-    if (result.ok) {
-      el.style.color = '#4ade80';
-      el.textContent = 'Te enviamos un enlace para restablecer tu contraseña a ' + email + '. Revisa tu correo.';
-      el.style.display = 'block';
-      setTimeout(() => { el.style.display = 'none'; el.style.color = ''; }, 6000);
-    } else {
-      showError('login-error', result.error === 'auth/user-not-found' ? 'No encontramos una cuenta con ese correo.' : 'No se pudo enviar el correo. Intenta de nuevo.');
-    }
-  } else {
-    link.textContent = originalText;
-    showError('login-error', 'Servicio no disponible en este momento.');
-  }
-}
 
 // ═══════════════════════════════════════
 // DONACIONES — SISTEMA INTELIGENTE Y SEGURO
@@ -1359,106 +1233,9 @@ const DonationSecurity = {
 const donationAmounts = [1, 3, 5, 10, 25, 50];
 let customDonation = '';
 
-function openDonaciones() {
-  const content = document.getElementById('main-content');
-  
-  if (DonationSecurity.flagged) {
-    content.innerHTML = `
-    <div class="section-label">💝 Apoya MenteClara</div>
-    <div class="card" style="text-align:center;padding:24px;background:rgba(239,68,68,0.05);border-color:rgba(239,68,68,0.2)">
-      <div style="font-size:32px;margin-bottom:12px">⚠️</div>
-      <div style="font-size:14px;font-weight:600;color:#fca5a5;margin-bottom:8px">Actividad inusual detectada</div>
-      <div style="font-size:13px;color:var(--text-muted);line-height:1.6">Por tu seguridad hemos pausado temporalmente las donaciones desde este dispositivo. Esto se restablece automáticamente después de 1 hora.</div>
-      <div style="font-size:12px;color:var(--text-dim);margin-top:12px">Si crees que esto es un error, contacta soporte.</div>
-    </div>
-    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
-    return;
-  }
 
-  content.innerHTML = `
-  <div class="section-label">💝 Apoya MenteClara</div>
-  <div class="card" style="margin-bottom:12px;text-align:center;background:linear-gradient(135deg,var(--bg2),var(--bg3))">
-    <div style="font-size:28px;margin-bottom:8px">🙏</div>
-    <div style="font-size:15px;font-weight:600;color:var(--gold);margin-bottom:6px">Mantén la app gratuita</div>
-    <div style="font-size:13px;color:var(--text-muted);line-height:1.6">MenteClara es gratis para todos. Tu donación voluntaria ayuda a mantener los servidores, desarrollar nuevas funciones y llevar la Palabra a más personas.</div>
-    <div style="font-size:12px;color:var(--text-dim);margin-top:8px;font-style:italic">"Cada uno dé como propuso en su corazón... porque Dios ama al dador alegre." — 2 Corintios 9:7 RVR1960</div>
-  </div>
-  
-  <div class="section-label">Elige un monto (USD)</div>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
-    ${donationAmounts.map(a => `
-    <button onclick="selectDonation(${a},this)" style="background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:14px 8px;color:var(--text);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s" id="don-${a}">$${a}</button>`).join('')}
-  </div>
-  
-  <div style="margin-bottom:12px">
-    <label class="field-label">O ingresa otro monto (USD)</label>
-    <input class="field-input" type="number" id="custom-donation" placeholder="Ej: 2" min="1" max="500" style="margin-bottom:0" oninput="customDonation=this.value;document.querySelectorAll('[id^=don-]').forEach(b=>b.style.background='var(--card)')">
-  </div>
 
-  <div class="card" style="margin-bottom:12px;background:rgba(16,185,129,0.05);border-color:rgba(16,185,129,0.2)">
-    <div style="font-size:12px;color:#6ee7b7;margin-bottom:4px;font-weight:600">🔒 100% seguro</div>
-    <div style="font-size:12px;color:var(--text-muted);line-height:1.5">Las donaciones se procesan a través de PayPal. MenteClara nunca almacena datos de tarjetas. Puedes donar de forma anónima.</div>
-  </div>
 
-  <button class="btn-primary" onclick="processDonation()" id="btn-donate">Donar con PayPal</button>
-  <div style="font-size:11px;color:var(--text-dim);text-align:center;margin-top:8px">No es obligatorio. Gracias por usar MenteClara. 🙏</div>
-  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
-}
-
-function selectDonation(amount, btn) {
-  document.querySelectorAll('[id^=don-]').forEach(b => {
-    b.style.background = 'var(--card)';
-    b.style.borderColor = 'var(--border)';
-    b.style.color = 'var(--text)';
-  });
-  btn.style.background = 'rgba(107,79,216,0.2)';
-  btn.style.borderColor = 'var(--purple)';
-  btn.style.color = 'var(--purple-light)';
-  customDonation = amount;
-  const input = document.getElementById('custom-donation');
-  if (input) input.value = '';
-}
-
-function processDonation() {
-  const inputEl = document.getElementById('custom-donation');
-  const amount = parseFloat(customDonation || inputEl?.value || 0);
-  
-  // Análisis de seguridad
-  const check = DonationSecurity.analyze(amount);
-  
-  if (!check.ok) {
-    const messages = {
-      multiple_attempts: 'Has intentado donar varias veces en poco tiempo. Por tu seguridad, espera unos minutos.',
-      high_amount: 'El monto ingresado es inusualmente alto. Por tu seguridad, el máximo es $500 USD. Contacta soporte para donaciones mayores.',
-      invalid_amount: 'Por favor selecciona o ingresa un monto válido.',
-      flagged: 'Por seguridad, las donaciones están temporalmente pausadas desde este dispositivo.'
-    };
-    showToast(messages[check.reason] || 'Error en la donación');
-    if (check.reason === 'multiple_attempts' || check.reason === 'high_amount') {
-      openDonaciones(); // Re-render para mostrar panel de alerta si está flagged
-    }
-    return;
-  }
-  
-  if (!amount || amount <= 0) {
-    showToast('Selecciona o ingresa un monto primero');
-    return;
-  }
-
-  // Redirigir a PayPal — reemplaza TU_PAYPAL_EMAIL con tu correo de PayPal
-  const paypalUrl = `https://www.paypal.com/donate/?business=TU_PAYPAL_EMAIL&amount=${amount}&currency_code=USD&item_name=Donacion+MenteClara`;
-  window.open(paypalUrl, '_blank');
-  showToast(`💝 Gracias por tu donación de $${amount} USD`);
-  DonationSecurity.reset();
-}
-
-async function doLogout() {
-  if (window.fbLogout) await window.fbLogout();
-  currentUser = null;
-  document.getElementById('main-app').style.display = 'none';
-  document.getElementById('screen-login').classList.remove('hidden');
-  document.getElementById('session-bar').style.display = 'none';
-}
 
 // ═══════════════════════════════════════
 // TABS
@@ -1466,7 +1243,6 @@ async function doLogout() {
 let timerInterval = null;
 let timerSeconds = 0;
 let timerRunning = false;
-const communityPosts = [];
 
 // ═══════════════════════════════════════
 // CHAT CON IA REAL (ANTHROPIC API)
@@ -1476,6 +1252,10 @@ const chatHistory = [
 ];
 
 const CHAT_SYSTEM_PROMPT = `Eres un asistente espiritual bíblico dentro de MenteClara. Tu nombre es "IA Bíblica".
+
+IDIOMA: responde SIEMPRE en el mismo idioma en que te escriba la persona. Si escribe en swahili, responde en swahili; si escribe en coreano, en coreano. Nunca cambies de idioma por tu cuenta ni le pidas que escriba en español.
+
+SEGURIDAD: si la persona expresa que quiere quitarse la vida, hacerse daño, o que alguien la está lastimando, NO respondas solo con un versículo. Dile con calidez que hay ayuda disponible, sugiérele hablar hoy con alguien de confianza y menciona la Línea de la Vida de México (800 911 2000) o el número de emergencias de su país. No des detalles de métodos bajo ninguna circunstancia.
 
 PERSONALIDAD:
 - Cálido, cercano y empático — como un amigo espiritual maduro
@@ -1541,11 +1321,12 @@ function escapeHtml(str) {
 
 async function sendChat() {
   if (chatLoading) return;
+  if (avisarSiOffline()) return; // el chat necesita el servidor
   loadChatLimit();
   if (chatMsgsToday >= CHAT_DAILY_LIMIT) {
     const msgs = document.getElementById('chat-msgs');
     if (msgs && !document.getElementById('limit-msg')) {
-      msgs.innerHTML += `<div class="msg msg-ai" id="limit-msg"><div class="msg-sender">Sistema</div><div class="msg-bubble" style="color:var(--gold)">Has alcanzado el límite de ${CHAT_DAILY_LIMIT} mensajes diarios. Vuelve mañana o actualiza a Premium para mensajes ilimitados. 🙏</div></div>`;
+      msgs.innerHTML += `<div class="msg msg-ai" id="limit-msg"><div class="msg-sender">Sistema</div><div class="msg-bubble" style="color:var(--gold)">Has alcanzado el límite de ${CHAT_DAILY_LIMIT} mensajes diarios. Vuelve mañana. 🙏</div></div>`;
       msgs.scrollTop = msgs.scrollHeight;
     }
     return;
@@ -1585,17 +1366,22 @@ async function sendChat() {
     chatApiMessages.push({ role: 'assistant', content: reply });
     chatHistory.push({ role: 'ai', text: reply });
     const thinking = document.getElementById('thinking');
-    if (thinking) thinking.outerHTML = `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${escapeHtml(reply)}</div></div>`;
+    if (thinking) thinking.outerHTML = burbujaIA(reply, chatHistory.length - 1);
   } catch(e) {
     const reply = fallbackReply(clean);
     chatHistory.push({ role: 'ai', text: reply });
     const thinking = document.getElementById('thinking');
-    if (thinking) thinking.outerHTML = `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${escapeHtml(reply)}</div></div>`;
+    if (thinking) thinking.outerHTML = burbujaIA(reply, chatHistory.length - 1);
   }
   
   chatLoading = false;
   const msgs2 = document.getElementById('chat-msgs');
   if (msgs2) msgs2.scrollTop = msgs2.scrollHeight;
+}
+
+function burbujaIA(texto, idx) {
+  return `<div class="msg msg-ai"><div class="msg-sender">${getText('chat_ai_name')}</div><div class="msg-bubble">${escapeHtml(texto)}</div>` +
+         `<button class="report-ia" data-idx="${idx}" onclick="reportarRespuestaIA(this)" aria-label="Reportar esta respuesta" title="Reportar esta respuesta">⚑</button></div>`;
 }
 
 function fallbackReply(text) {
@@ -1613,7 +1399,6 @@ function showTab(tab, btn) {
   btn.classList.add('active');
   const content = document.getElementById('main-content');
   if (tab === 'home') content.innerHTML = renderHome();
-  else if (tab === 'comunidad') content.innerHTML = renderComunidad();
   else if (tab === 'pueblos') content.innerHTML = renderPueblos();
   else if (tab === 'planes') content.innerHTML = renderPlanes();
   else if (tab === 'chat') content.innerHTML = renderChat();
@@ -1638,289 +1423,132 @@ function getLevel(points) {
   return { level: current.level, name: current.name, next: nextTier ? nextTier.min : current.min + 100 };
 }
 
-/* ══════════════════════════════════════════════════════════
-   SISTEMA DE SUSCRIPCIONES — Google Play Billing
-   Construido 4 ago 2026. DESACTIVADO hasta terminar la configuración
-   en Play Console (ver PASOS_PENDIENTES.md).
+// Version del aviso de privacidad aceptado. Subirla cada vez que cambie el
+// aviso: si cambia la finalidad hay que volver a pedir consentimiento.
+const AVISO_PRIVACIDAD_VERSION = '2026-08-09';
 
-   Cómo funciona el pago dentro de una TWA: la Digital Goods API solo existe
-   cuando la app corre instalada desde Play Store. En un navegador normal no
-   existe, por eso pagosDisponibles() la detecta en vez de asumir.
-
-   Principios que sigue esta implementación:
-   - El servidor manda. El estado del cliente es solo un caché visual; quien
-     decide si alguien tiene Premium es el Worker validando contra Google.
-   - acknowledge obligatorio: si no se confirma la compra en 3 días, Google
-     la reembolsa automáticamente y el usuario pierde el acceso que pagó.
-   - Respetar el periodo de gracia: si un cobro falla, Google reintenta durante
-     días y el usuario DEBE conservar el acceso mientras tanto. Cortarlo de
-     inmediato es un error común que genera cancelaciones y malas reseñas.
-   - Restaurar compras: si cambia de teléfono o reinstala, tiene que poder
-     recuperar lo que pagó sin volver a pagar.
-   - Link para gestionar la suscripción: Google lo exige en sus políticas.
-   ══════════════════════════════════════════════════════════ */
-const PAGOS_ACTIVO = false; // ← poner true solo después de completar PASOS_PENDIENTES.md
 const WORKER_URL = 'https://soft-art-11eb.elestacerc4eloim.workers.dev';
 
-const PLANES_PAGO = [
-  {
-    id: 'premium_mensual',
-    nombre: 'Premium',
-    precio: '$1 USD / mes',
-    descripcion: 'Para tu caminar personal',
-    beneficios: [
-      'Chat con IA sin límite diario',
-      'Todos los planes de lectura',
-      'Sin anuncios, para siempre',
-    ],
-  },
-  {
-    id: 'iglesia_mensual',
-    nombre: 'Iglesia',
-    precio: '$5 USD / mes',
-    descripcion: 'Para grupos pequeños y células',
-    beneficios: [
-      'Todo lo de Premium',
-      'Peticiones de oración privadas del grupo',
-      'Planes de lectura compartidos',
-    ],
-  },
-  {
-    id: 'ministerio_mensual',
-    nombre: 'Ministerio',
-    precio: '$10 USD / mes',
-    descripcion: 'Para iglesias y pastores',
-    beneficios: [
-      'Todo lo de Iglesia',
-      'Panel para varios grupos',
-      'Soporte prioritario',
-    ],
-  },
-];
 
 // Estado de suscripción. Es solo un caché para pintar la interfaz rápido;
 // la fuente de verdad siempre es el servidor.
-let suscripcion = { activa: false, plan: null, enGracia: false, verificadoEn: null };
 
-function esPremium() {
-  // Durante el periodo de gracia el acceso se mantiene: Google sigue
-  // reintentando el cobro y cortar aquí sería castigar al usuario por
-  // una tarjeta vencida.
-  return suscripcion.activa || suscripcion.enGracia;
+
+
+
+
+
+
+
+
+// ─── Situaciones ───────────────────────────────────────────────────────
+// Cada situación apunta a palabras que YA existen en el campo "temas" de
+// RV1909_BUSQUEDA. Al agregar versículos nuevos con esos temas, aparecen
+// aquí solos, sin tocar esta tabla.
+const SITUACIONES = [
+  { id:'ansiedad',  icono:'🌊', etiqueta:'Ansiedad',        temas:['ansiedad','preocupacion','afan','angustia','estres'] },
+  { id:'miedo',     icono:'🛡', etiqueta:'Miedo',           temas:['miedo','temor','valor'] },
+  { id:'tristeza',  icono:'🌧', etiqueta:'Tristeza',        temas:['tristeza','soledad','desanimo'] },
+  { id:'duelo',     icono:'🕯', etiqueta:'Duelo',           temas:['duelo','muerte','consuelo','luto'] },
+  { id:'perdon',    icono:'🕊', etiqueta:'Perdón',          temas:['perdon','rencor','culpa','arrepentimiento'] },
+  { id:'salud',     icono:'🩺', etiqueta:'Enfermedad',      temas:['sanidad','enfermedad','salud','dolor'] },
+  { id:'familia',   icono:'🏠', etiqueta:'Familia',         temas:['familia','matrimonio','hijos','padres'] },
+  { id:'dinero',    icono:'🌾', etiqueta:'Dinero y trabajo',temas:['provision','dinero','trabajo','necesidad'] },
+  { id:'decision',  icono:'🧭', etiqueta:'Una decisión',    temas:['sabiduria','decisiones','direccion','guia'] },
+  { id:'fuerza',    icono:'⛰', etiqueta:'Necesito fuerza',  temas:['fuerza','proteccion','fortaleza','cansancio'] },
+  { id:'gratitud',  icono:'☀️', etiqueta:'Gratitud',         temas:['gozo','alegria','gratitud','alabanza'] },
+  { id:'proposito', icono:'✨', etiqueta:'Mi propósito',     temas:['proposito','salvacion','llamado','fe'] },
+  { id:'tentacion', icono:'⚖️', etiqueta:'Tentación',        temas:['tentacion','lucha','humildad','pecado'] },
+];
+
+// Situaciones que NO se responden con un versículo. Un selector de emociones
+// va a sacar gente en crisis: devolverle un salmo y nada más sería lo peor
+// que puede hacer la app. Estas van directo a ayuda humana.
+const SITUACIONES_CRISIS = [
+  { id:'crisis_vida',  icono:'🆘', etiqueta:'No quiero seguir viviendo' },
+  { id:'crisis_dano',  icono:'🆘', etiqueta:'Quiero hacerme daño' },
+  { id:'crisis_abuso', icono:'🆘', etiqueta:'Alguien me está lastimando' },
+];
+
+function renderSituaciones() {
+  const chips = SITUACIONES.map(s =>
+    `<button class="chip-sit" onclick="verSituacion('${s.id}')">${s.icono} ${s.etiqueta}</button>`
+  ).join('');
+  const crisis = SITUACIONES_CRISIS.map(s =>
+    `<button class="chip-sit chip-crisis" onclick="abrirCrisis()">${s.icono} ${s.etiqueta}</button>`
+  ).join('');
+  return `
+  <div class="section-label">¿Cómo estás hoy?</div>
+  <div class="card-sub" style="margin-bottom:10px">Toca lo que más se parezca a lo que sientes y la Palabra te acompaña.</div>
+  <div class="chips-sit">${chips}</div>
+  <div class="section-label" style="margin-top:16px">Si estás pasando por algo grave</div>
+  <div class="chips-sit">${crisis}</div>
+  <div id="sit-resultado" style="margin-top:14px"></div>`;
 }
 
-// La Digital Goods API solo existe dentro de la app instalada desde Play Store.
-async function pagosDisponibles() {
-  if (!PAGOS_ACTIVO) return false;
-  if (!('getDigitalGoodsService' in window)) return false;
-  try {
-    await window.getDigitalGoodsService('https://play.google.com/billing');
-    return true;
-  } catch (e) {
-    return false;
-  }
+function versiculosDeSituacion(id) {
+  const sit = SITUACIONES.find(s => s.id === id);
+  if (!sit) return [];
+  return RV1909_BUSQUEDA.filter(v => {
+    const t = ' ' + (v.temas || '') + ' ';
+    return sit.temas.some(w => t.includes(' ' + w + ' ') || t.includes(w));
+  });
 }
 
-async function verificarSuscripcionEnServidor(token, planId) {
-  try {
-    const idToken = window._fbUser ? await window._fbUser.getIdToken() : null;
-    if (!idToken) return { ok: false, motivo: 'sin-sesion' };
+function verSituacion(id) {
+  const sit = SITUACIONES.find(s => s.id === id);
+  const hallados = versiculosDeSituacion(id);
+  const caja = document.getElementById('sit-resultado');
+  if (!caja) return;
 
-    const res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ accion: 'verificar-compra', token, planId }),
-    });
-    if (!res.ok) return { ok: false, motivo: 'servidor' };
-    return await res.json();
-  } catch (e) {
-    return { ok: false, motivo: 'red' };
-  }
-}
-
-// Consulta al servidor si este usuario tiene suscripción activa.
-// Se llama al iniciar sesión, no en cada pantalla.
-async function refrescarEstadoSuscripcion() {
-  if (!PAGOS_ACTIVO) return;
-  try {
-    const idToken = window._fbUser ? await window._fbUser.getIdToken() : null;
-    if (!idToken) return;
-
-    const res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ accion: 'estado-suscripcion' }),
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    suscripcion = {
-      activa: !!data.activa,
-      plan: data.plan || null,
-      enGracia: !!data.enGracia,
-      verificadoEn: Date.now(),
-    };
-  } catch (e) { /* si falla, se conserva el último estado conocido */ }
-}
-
-async function comprarPlan(planId) {
-  const plan = PLANES_PAGO.find(p => p.id === planId);
-  if (!plan) return;
-
-  if (!(await pagosDisponibles())) {
-    showToast('Los pagos solo funcionan en la app instalada desde Google Play.');
+  if (!hallados.length) {
+    caja.innerHTML = `<div class="card"><div class="card-sub">Todavía no tenemos versículos para esto. Estamos agregando más.</div></div>`;
     return;
   }
 
-  const btn = document.getElementById('btn-comprar-' + planId);
-  if (btn) { btn.textContent = 'Procesando...'; btn.disabled = true; }
+  // Rota por día para que no salga siempre el mismo primero.
+  const giro = Math.floor(Date.now() / 86400000) % hallados.length;
+  const ordenados = hallados.slice(giro).concat(hallados.slice(0, giro));
 
-  try {
-    const request = new PaymentRequest(
-      [{ supportedMethods: 'https://play.google.com/billing', data: { sku: planId } }],
-      { total: { label: plan.nombre, amount: { currency: 'USD', value: '0' } } }
-    );
-
-    const response = await request.show();
-    const token = response.details.purchaseToken;
-
-    // El servidor valida contra la API de Google antes de dar acceso.
-    // Nunca confiar en que el cliente diga "ya pagué".
-    const verificado = await verificarSuscripcionEnServidor(token, planId);
-
-    if (!verificado.ok) {
-      await response.complete('fail');
-      showToast('No pudimos confirmar tu pago. Si se te cobró, escríbenos y lo resolvemos.');
-      if (btn) { btn.textContent = 'Suscribirme'; btn.disabled = false; }
-      return;
-    }
-
-    // acknowledge: sin esto Google reembolsa la compra a los 3 días.
-    // El servidor ya lo hizo al validar; aquí solo cerramos el flujo de pago.
-    await response.complete('success');
-
-    suscripcion = { activa: true, plan: planId, enGracia: false, verificadoEn: Date.now() };
-    showToast('¡Gracias! Tu suscripción ' + plan.nombre + ' está activa.');
-    openPlanesPago();
-
-  } catch (e) {
-    // AbortError = el usuario cerró la ventana de pago. No es un error real.
-    if (e && e.name !== 'AbortError') {
-      showToast('No se pudo completar la compra.');
-    }
-    if (btn) { btn.textContent = 'Suscribirme'; btn.disabled = false; }
-  }
+  caja.innerHTML = `
+    <div class="section-label">${sit.icono} ${escapeHtml(sit.etiqueta)} — ${ordenados.length} versículos</div>
+    ${ordenados.map(v => `
+      <div class="card" style="margin-bottom:10px">
+        <div class="verse-ref" style="margin-bottom:6px">${escapeHtml(v.ref)}</div>
+        <div style="font-size:14px;line-height:1.6;font-style:italic;color:var(--text)">${escapeHtml(v.text)}</div>
+      </div>`).join('')}
+    <div class="card-sub" style="margin-top:4px">Estos versículos no sustituyen el acompañamiento de tu pastor ni de un profesional de salud.</div>`;
+  try { if (caja.scrollIntoView) caja.scrollIntoView({ behavior:'smooth', block:'start' }); } catch(e) {}
 }
 
-// Restaurar compras: imprescindible si cambia de teléfono o reinstala.
-async function restaurarCompras() {
-  const btn = document.getElementById('btn-restaurar');
-  if (btn) { btn.textContent = 'Buscando...'; btn.disabled = true; }
-
-  if (!(await pagosDisponibles())) {
-    showToast('Los pagos solo funcionan en la app instalada desde Google Play.');
-    if (btn) { btn.textContent = 'Restaurar compras'; btn.disabled = false; }
-    return;
-  }
-
-  try {
-    const servicio = await window.getDigitalGoodsService('https://play.google.com/billing');
-    const compras = await servicio.listPurchases();
-
-    if (!compras.length) {
-      showToast('No encontramos compras anteriores con esta cuenta de Google.');
-      if (btn) { btn.textContent = 'Restaurar compras'; btn.disabled = false; }
-      return;
-    }
-
-    for (const compra of compras) {
-      const verificado = await verificarSuscripcionEnServidor(compra.purchaseToken, compra.itemId);
-      if (verificado.ok && verificado.activa) {
-        suscripcion = { activa: true, plan: compra.itemId, enGracia: !!verificado.enGracia, verificadoEn: Date.now() };
-        showToast('¡Listo! Restauramos tu suscripción.');
-        openPlanesPago();
-        return;
-      }
-    }
-
-    showToast('No encontramos una suscripción activa para restaurar.');
-    if (btn) { btn.textContent = 'Restaurar compras'; btn.disabled = false; }
-  } catch (e) {
-    showToast('No se pudieron restaurar las compras.');
-    if (btn) { btn.textContent = 'Restaurar compras'; btn.disabled = false; }
-  }
-}
-
-// Google exige que la app ofrezca una forma de gestionar la suscripción.
-function gestionarSuscripcion() {
-  const plan = suscripcion.plan;
-  const url = plan
-    ? `https://play.google.com/store/account/subscriptions?sku=${plan}&package=app.menteclara.oracion`
-    : 'https://play.google.com/store/account/subscriptions';
-  window.open(url, '_blank');
-}
-
-function openPlanesPago() {
+// Ayuda real, no un versículo. Los números son por país; hoy se muestran los
+// de México y se indica cómo buscar el local.
+function abrirCrisis() {
   const content = document.getElementById('main-content');
-
-  if (!PAGOS_ACTIVO) {
-    content.innerHTML = `
-    <div class="section-label">Apoya MenteClara</div>
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-size:13px;color:var(--text);line-height:1.6">
-        Las suscripciones todavía no están disponibles. Por ahora MenteClara es
-        gratis y completa, y si quieres apoyar el proyecto puedes hacerlo con una
-        donación voluntaria.
-      </div>
-    </div>
-    <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))">← Volver</button>`;
-    return;
-  }
-
-  const activo = esPremium();
-
-  const tarjetas = PLANES_PAGO.map(p => {
-    const esActual = suscripcion.plan === p.id && activo;
-    return `
-    <div class="card" style="margin-bottom:12px;${esActual ? 'border-color:var(--gold)' : ''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-        <div>
-          <div style="font-weight:600;font-size:15px;color:var(--text)">${p.nombre}</div>
-          <div class="card-sub">${p.descripcion}</div>
-        </div>
-        <div style="font-size:13px;color:var(--gold);white-space:nowrap">${p.precio}</div>
-      </div>
-      <ul style="margin:10px 0 0 16px;padding:0;font-size:12px;color:var(--text-dim);line-height:1.7">
-        ${p.beneficios.map(b => `<li>${b}</li>`).join('')}
-      </ul>
-      ${esActual
-        ? `<div style="margin-top:10px;font-size:12px;color:var(--gold)">✓ Tu plan actual</div>`
-        : `<button class="btn-primary" id="btn-comprar-${p.id}" onclick="comprarPlan('${p.id}')" style="margin-top:10px">Suscribirme</button>`}
-    </div>`;
-  }).join('');
-
-  const avisoGracia = suscripcion.enGracia ? `
-    <div class="card" style="margin-bottom:12px;border-color:#e0a03d">
-      <div style="font-size:12px;color:var(--text-dim);line-height:1.5">
-        Hubo un problema con tu último pago. Conservas el acceso completo mientras
-        Google reintenta el cobro. Puedes actualizar tu método de pago desde
-        "Gestionar suscripción".
-      </div>
-    </div>` : '';
-
   content.innerHTML = `
-  <div class="section-label">Planes</div>
-  ${avisoGracia}
-  <div class="card-sub" style="margin-bottom:14px">
-    La Biblia, los devocionales y la comunidad son gratis para siempre.
-    Estos planes sostienen el proyecto y desbloquean funciones extra.
+  <div class="section-label">No estás solo</div>
+  <div class="card" style="margin-bottom:14px;border-color:var(--gold)">
+    <div style="font-size:14px;line-height:1.7;color:var(--text)">
+      Lo que sientes importa, y hay personas preparadas para escucharte ahora mismo.
+      Esta app no puede darte esa ayuda, pero sí puede llevarte a ella.
+    </div>
   </div>
-  ${tarjetas}
-  <button class="btn-ghost" id="btn-restaurar" onclick="restaurarCompras()" style="margin-top:6px">Restaurar compras</button>
-  ${activo ? `<button class="btn-ghost" onclick="gestionarSuscripcion()" style="margin-top:6px">Gestionar suscripción</button>` : ''}
-  <div style="font-size:11px;color:var(--text-dim);margin-top:12px;line-height:1.5">
-    Las suscripciones se renuevan automáticamente. Puedes cancelarlas cuando
-    quieras desde Google Play; conservarás el acceso hasta que termine el
-    periodo que ya pagaste.
+  <div class="card" style="margin-bottom:10px">
+    <div class="card-title">📞 México — Línea de la Vida</div>
+    <div class="card-sub">800 911 2000 · gratuita, 24 horas, todos los días</div>
+    <a href="tel:8009112000" class="btn-primary" style="display:block;text-align:center;text-decoration:none;margin-top:10px">Llamar ahora</a>
+  </div>
+  <div class="card" style="margin-bottom:10px">
+    <div class="card-title">🚨 Emergencia inmediata</div>
+    <div class="card-sub">Si tu vida o la de alguien más está en peligro ahora, marca el número de emergencias de tu país (911 en México).</div>
+  </div>
+  <div class="card" style="margin-bottom:10px">
+    <div class="card-title">🌎 Fuera de México</div>
+    <div class="card-sub">Busca "línea de prevención del suicidio" junto al nombre de tu país, o acude a la sala de urgencias más cercana.</div>
+  </div>
+  <div class="card" style="margin-bottom:10px">
+    <div class="card-title">🤝 Alguien de confianza</div>
+    <div class="card-sub">Un familiar, tu pastor, un maestro, un amigo. Decirlo en voz alta a una persona real cambia las cosas. No tienes que explicarlo perfecto.</div>
   </div>
   <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
 }
@@ -1933,7 +1561,7 @@ function renderHome() {
   <div class="section-label">${getText('sec_stats')}</div>
   <div class="stats-grid">
     <div class="stat-card" onclick="openAchievements()" style="cursor:pointer"><div class="stat-num" id="stat-streak-num">${getStreak()}</div><div class="stat-label">${getText('stat_streak')}</div></div>
-    <div class="stat-card"><div class="stat-num" id="stat-praying-num">${getPrayingCount()}</div><div class="stat-label">${getText('stat_praying')}</div></div>
+    <div class="stat-card" onclick="openSavedVerses()" style="cursor:pointer"><div class="stat-num">${savedVerses.length}</div><div class="stat-label">Versículos guardados</div></div>
     <div class="stat-card" onclick="openAchievements()" style="cursor:pointer"><div class="stat-num">${earnedCount}</div><div class="stat-label">${getText('stat_goals')}</div></div>
   </div>
   <div class="streak">${renderStreakDays()}</div>
@@ -1945,7 +1573,8 @@ function renderHome() {
     </div>
     <div style="font-size:11px;color:var(--text-muted)">${userPoints}/${lvl.next} pts</div>
   </div>
-  <div class="section-label">${getText('sec_modules')}</div>
+  ${renderSituaciones()}
+  <div class="section-label" style="margin-top:18px">${getText('sec_modules')}</div>
   <div class="mod-card" onclick="openTimer()">
     <div class="mod-icon" style="background:#2d1b6b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg></div>
     <div class="mod-info"><div class="mod-name">${getText('mod_timer')}</div><div class="mod-desc">${getText('mod_timer_d')}</div></div>
@@ -1968,17 +1597,12 @@ function renderHome() {
   </div>
   <div class="mod-card" onclick="openBibleSearch()">
     <div class="mod-icon" style="background:#0a1a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-    <div class="mod-info"><div class="mod-name">Buscar versículo</div><div class="mod-desc">${bibleVersion === 'rv1909' ? 'Busca en la Reina Valera 1909' : 'Busca en toda la RVR1960 en vivo'}</div></div>
+    <div class="mod-info"><div class="mod-name">Buscar versículo</div><div class="mod-desc">Busca en la Reina Valera 1909</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
   <div class="mod-card" onclick="openNotificaciones()">
     <div class="mod-icon" style="background:#0a1a2d"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
     <div class="mod-info"><div class="mod-name">Notificaciones diarias</div><div class="mod-desc">Versículo + meditación + oración a las 6AM y 6PM</div></div>
-    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
-  </div>
-  <div class="mod-card" onclick="openDonaciones()">
-    <div class="mod-icon" style="background:#1a0a1a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
-    <div class="mod-info"><div class="mod-name">💝 Apoya MenteClara</div><div class="mod-desc">Donación voluntaria — mantén la app gratuita</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
   <div class="mod-card" onclick="openAyuno()">
@@ -2021,14 +1645,11 @@ function renderHome() {
     <div class="mod-info"><div class="mod-name">${getText('mod_security')}</div><div class="mod-desc">${getText('mod_security_d')}</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
-  <div class="premium-card" onclick="openChurchPlans()" style="cursor:pointer">
-    <div class="premium-info">
-      <div class="prem-title">⛪ ${getText('prem_title')}</div>
-      <div class="prem-desc">${getText('prem_desc')}</div>
-    </div>
-    <button class="btn-upgrade">${getText('prem_btn')}</button>
-  </div>
   <div class="section-label" style="margin-top:18px">Ayuda y contacto</div>
+  <div class="mod-card" onclick="openFAQ()">
+    <div class="mod-info"><div class="mod-name">❓ Preguntas frecuentes</div><div class="mod-desc">Respuestas rápidas a las dudas más comunes</div></div>
+    <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+  </div>
   <div class="mod-card" onclick="openReportarFalla()">
     <div class="mod-info"><div class="mod-name">🐞 Reportar una falla</div><div class="mod-desc">¿Algo no funciona? Cuéntanos qué pasó</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
@@ -2041,21 +1662,142 @@ function renderHome() {
     <div class="mod-info"><div class="mod-name">💬 Síguenos y escríbenos</div><div class="mod-desc">Redes sociales y correo de contacto</div></div>
     <svg class="mod-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
   </div>
-  <div style="text-align:center;margin-top:8px">
-    <button onclick="doLogout()" style="background:none;border:none;color:var(--text-dim);font-size:12px;cursor:pointer">Cerrar sesión</button>
-  </div>
-  <div style="text-align:center;margin-top:4px">
-    <button onclick="openDeleteAccount()" style="background:none;border:none;color:#c0392b;font-size:11px;cursor:pointer;opacity:0.7">Eliminar cuenta</button>
+  <div style="text-align:center;margin-top:28px;padding-top:20px;border-top:0.5px solid var(--border)">
+    <button onclick="openDeleteAccount()" style="background:none;border:none;color:#c0392b;font-size:11px;cursor:pointer;opacity:0.6">Eliminar cuenta permanentemente</button>
   </div>
   `;
+}
+
+
+// ═══════════════════════════════════════
+// PREGUNTAS FRECUENTES
+// Objetivo: que el usuario resuelva su duda aquí en vez de escribir un correo.
+// Cubre las preguntas que más llegan en apps de este tipo: cuenta, datos,
+// privacidad, límites del chat, ayuno, comunidad y problemas técnicos.
+// ═══════════════════════════════════════
+const FAQ_ITEMS = [
+  {
+    cat: 'Tu cuenta',
+    preguntas: [
+      { q: '¿Tengo que pagar algo?',
+        a: 'No. MenteClara es gratuita y no tiene compras dentro de la app, ni suscripciones, ni anuncios.' },
+      { q: 'Olvidé mi contraseña, ¿qué hago?',
+        a: 'En la pantalla de inicio de sesión toca "¿Olvidaste tu contraseña?" y escribe tu correo. Te llegará un enlace para crear una nueva. Si no lo ves, revisa la carpeta de spam.' },
+      { q: '¿Por qué me pide iniciar sesión otra vez?',
+        a: 'No debería. La sesión se queda abierta hasta que tú cierres sesión a propósito. Si te vuelve a pedir contraseña sin que hayas cerrado sesión, repórtalo con "Reportar una falla" y dinos qué teléfono usas.' },
+      { q: '¿Cómo elimino mi cuenta?',
+        a: 'En esta misma pantalla, hasta abajo, hay un botón "Eliminar cuenta". Te va a pedir tu contraseña para confirmar. Es permanente: se pierden tu diario, versículos guardados y racha. También puedes pedirlo por correo a eliminaciondecuentas@tutamail.com.' },
+    ],
+  },
+  {
+    cat: 'Tus datos',
+    preguntas: [
+      { q: '¿Dónde se guarda mi diario de oración?',
+        a: 'Solo en tu teléfono, no en nuestros servidores. Eso lo hace más privado, pero también significa que si borras los datos de la app, la desinstalas o cambias de teléfono, se pierde. Usa "Respaldar mis datos" para guardar una copia.' },
+      { q: '¿Alguien puede ver lo que escribo en mi diario?',
+        a: 'Nadie. Ni nosotros. El diario y los testimonios nunca salen de tu dispositivo.' },
+      { q: '¿Mis peticiones de oración son anónimas?',
+        a: 'Sí. No pedimos correo, nombre ni teléfono: tu cuenta es un identificador anónimo que genera Firebase.' },
+      { q: '¿Cómo respaldo mi información?',
+        a: 'En "Respaldar mis datos" se genera un archivo con tu diario y testimonios que puedes guardar donde quieras. Hazlo de vez en cuando, sobre todo antes de cambiar de teléfono.' },
+    ],
+  },
+  {
+    cat: 'Chat con IA',
+    preguntas: [
+      { q: '¿Por qué tiene un límite de mensajes al día?',
+        a: 'Cada conversación tiene un costo real para nosotros. El límite diario permite que la app siga siendo gratuita para todos. Se reinicia cada día a medianoche.' },
+      { q: '¿El chat reemplaza a un pastor o consejero?',
+        a: 'No. Es una ayuda para reflexionar y encontrar pasajes bíblicos, pero no sustituye el acompañamiento de tu iglesia, ni consejo médico, legal o psicológico. Si estás pasando por una crisis, busca ayuda profesional.' },
+      { q: 'El chat no responde, ¿qué pasa?',
+        a: 'Revisa tu conexión a internet. Si ya llegaste al límite del día, te lo dirá con un mensaje. Si sigue sin funcionar, repórtalo con "Reportar una falla".' },
+    ],
+  },
+  {
+    cat: 'Ayuno',
+    preguntas: [
+      { q: '¿Por qué el ayuno se detiene a las 15 horas?',
+        a: 'Por tu seguridad. MenteClara no es una app médica y no puede acompañar ayunos prolongados de forma responsable. Al llegar a 15 horas se cierra solo. Si tu iglesia te acompaña en un ayuno más largo, hazlo con esa guía y bajo supervisión, no con un cronómetro.' },
+      { q: '¿Es seguro ayunar?',
+        a: 'Depende de cada persona. Consulta a un médico antes si tienes alguna condición de salud, estás embarazada o en lactancia, eres menor de edad o tomas medicamentos. Si durante el ayuno sientes mareo, debilidad fuerte o palpitaciones, termínalo y busca atención médica.' },
+    ],
+  },
+  {
+    cat: 'Chat con IA',
+    preguntas: [
+      { q: '¿Con quién estoy hablando en el chat?',
+        a: 'Con un modelo de inteligencia artificial, no con una persona. Puede equivocarse. No sustituye a tu pastor, a un consejero ni a un profesional de salud.' },
+      { q: 'Una respuesta me pareció ofensiva o equivocada, ¿qué hago?',
+        a: 'Toca el ícono de bandera (⚑) debajo de esa respuesta. Nos llega el texto para revisarlo.' },
+      { q: '¿Se guarda lo que escribo en el chat?',
+        a: 'Tu conversación se envía a Anthropic para generar la respuesta y no se usa para entrenar modelos. No la guardamos ligada a tu cuenta.' },
+    ],
+  },
+  {
+    cat: 'Problemas técnicos',
+    preguntas: [
+      { q: 'La app aparece como "app.menteclara.oracion (unreviewed)"',
+        a: 'Es normal durante las pruebas. Google todavía no termina de revisar la app y por eso muestra el nombre técnico. Es la misma app y cambiará solo.' },
+      { q: 'No veo los cambios nuevos de la app',
+        a: 'Cierra la app por completo (no solo minimizarla) y vuelve a abrirla. Si sigue igual, ciérrala y ábrela una segunda vez.' },
+      { q: 'La app se ve en blanco o no carga',
+        a: 'Revisa tu conexión. Si persiste, cierra la app del todo y ábrela de nuevo. Si aún así falla, repórtalo con "Reportar una falla" e indícanos tu modelo de teléfono.' },
+      { q: '¿Funciona sin internet?',
+        a: 'Parcialmente. Los versículos, el diario y el tracker de ayuno funcionan sin conexión. El chat con IA sí necesita internet.' },
+    ],
+  },
+];
+
+function toggleFAQ(id) {
+  const resp = document.getElementById('faq-r-' + id);
+  const flecha = document.getElementById('faq-f-' + id);
+  if (!resp) return;
+  const abierto = resp.style.display === 'block';
+  resp.style.display = abierto ? 'none' : 'block';
+  if (flecha) flecha.style.transform = abierto ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+
+function openFAQ() {
+  const content = document.getElementById('main-content');
+  let id = 0;
+
+  const secciones = FAQ_ITEMS.map(seccion => {
+    const items = seccion.preguntas.map(p => {
+      id++;
+      return `
+      <div class="card" style="margin-bottom:8px;padding:0;overflow:hidden">
+        <div onclick="toggleFAQ(${id})" style="padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:10px">
+          <svg id="faq-f-${id}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2.5" style="flex-shrink:0;transition:transform 0.2s"><polyline points="9,18 15,12 9,6"/></svg>
+          <div style="font-size:13px;color:var(--text);font-weight:500;line-height:1.4">${escapeHtml(p.q)}</div>
+        </div>
+        <div id="faq-r-${id}" style="display:none;padding:0 14px 14px 38px;font-size:12px;color:var(--text-dim);line-height:1.6">${escapeHtml(p.a)}</div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="section-label" style="margin-top:16px">${escapeHtml(seccion.cat)}</div>
+    ${items}`;
+  }).join('');
+
+  content.innerHTML = `
+  <div class="section-label">❓ Preguntas frecuentes</div>
+  <div class="card-sub" style="margin-bottom:6px">Toca una pregunta para ver la respuesta.</div>
+  ${secciones}
+  <div class="card" style="margin-top:16px">
+    <div style="font-size:12px;color:var(--text-dim);line-height:1.5">
+      ¿No encontraste tu respuesta? Escríbenos a <b>${CONTACTO_EMAIL}</b> o usa
+      <b>Reportar una falla</b> si algo no funciona.
+    </div>
+  </div>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:12px">← Volver</button>`;
 }
 
 // ═══════════════════════════════════════
 // CONTACTO Y REDES SOCIALES
 // ═══════════════════════════════════════
-// ⚠️ PENDIENTE: reemplazar estos dos valores por los reales.
+// ⚠️ PENDIENTE: reemplazar CONTACTO_FACEBOOK por la URL real de la página.
 const CONTACTO_FACEBOOK = 'https://www.facebook.com/TU_PAGINA_AQUI';
-const CONTACTO_EMAIL = 'TU_CORREO_AQUI@ejemplo.com';
+const CONTACTO_EMAIL = 'menteclarasoporte@gmail.com';
 
 function openContacto() {
   const faltaFB = CONTACTO_FACEBOOK.includes('TU_PAGINA_AQUI');
@@ -2100,8 +1842,7 @@ function openReportarFalla() {
     <label class="field-label">¿En qué parte de la app pasó?</label>
     <select class="field-input" id="falla-pantalla">
       <option value="Inicio">Inicio</option>
-      <option value="Comunidad">Comunidad</option>
-      <option value="Pueblos">Pueblos</option>
+            <option value="Pueblos">Pueblos</option>
       <option value="Planes">Planes de lectura</option>
       <option value="Chat IA">Chat IA</option>
       <option value="Biblia">Biblia / búsqueda de versículos</option>
@@ -2175,6 +1916,68 @@ async function enviarReporteFalla() {
 // teléfono, los pierde sin aviso. Esto le permite guardarlos en un archivo
 // y recuperarlos después, sin que ese contenido tan personal tenga que
 // viajar a ningún servidor.
+function openDeleteAccount() {
+  const content = document.getElementById('main-content');
+  content.innerHTML = `
+  <div class="section-label">⚠️ Eliminar cuenta</div>
+  <div class="card" style="margin-bottom:14px;border-color:#c0392b">
+    <div style="font-size:12px;color:var(--text-dim);line-height:1.6">
+      Esta acción es <b>permanente</b> y no se puede deshacer. Al eliminar tu cuenta:<br><br>
+      <ul style="margin:0 0 0 16px;padding:0">
+        <li>Se borra tu cuenta anónima y el registro de tu consentimiento. Es todo lo que MenteClara guarda de ti en internet</li>
+        <li>Tu racha y tus logros se pierden</li>
+        <li>Tu diario, testimonios y versículos guardados viven solo en este teléfono y no se borran automáticamente: si quieres conservarlos, descarga un respaldo antes desde "Respaldar mis datos"</li>
+      </ul><br>
+      Si prefieres pedirlo por correo, escribe a <b>eliminaciondecuentas@tutamail.com</b>.
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <label class="field-label">Para confirmar, escribe <b>ELIMINAR</b></label>
+    <input class="field-input" type="text" id="delete-confirm-word" placeholder="ELIMINAR" autocapitalize="characters">
+    <div class="error-msg" id="delete-account-error"></div>
+  </div>
+  <button class="btn-primary" id="btn-delete-account" style="background:#c0392b" onclick="confirmDeleteAccount()">Eliminar mi cuenta permanentemente</button>
+  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Cancelar</button>`;
+}
+
+// Las cuentas anónimas no tienen contraseña que reautenticar, así que la
+// confirmación escrita es lo que evita el borrado por un toque accidental.
+async function confirmDeleteAccount() {
+  const palabra = (document.getElementById('delete-confirm-word').value || '').trim().toUpperCase();
+  if (palabra !== 'ELIMINAR') {
+    showError('delete-account-error', 'Escribe ELIMINAR para confirmar.');
+    return;
+  }
+  if (avisarSiOffline()) return;
+
+  const btn = document.getElementById('btn-delete-account');
+  btn.textContent = 'Eliminando...';
+  btn.disabled = true;
+
+  if (window.fbDeleteAccount) {
+    const result = await window.fbDeleteAccount();
+    if (result.ok) {
+      borrarSesionLocal();
+      try { localStorage.removeItem(CONSENT_LOCAL_KEY); } catch(e) {}
+      modoOffline = false;
+      currentUser = null;
+      document.getElementById('main-app').style.display = 'none';
+      document.getElementById('screen-welcome').classList.remove('hidden');
+      document.getElementById('age-confirm').checked = false;
+      document.getElementById('sensitive-consent').checked = false;
+      alert('Tu cuenta fue eliminada. Gracias por haber sido parte de MenteClara.');
+      return;
+    }
+    btn.textContent = 'Eliminar mi cuenta permanentemente';
+    btn.disabled = false;
+    showError('delete-account-error', 'No se pudo eliminar la cuenta. Intenta de nuevo.');
+  } else {
+    btn.textContent = 'Eliminar mi cuenta permanentemente';
+    btn.disabled = false;
+    showError('delete-account-error', 'Servicio no disponible en este momento.');
+  }
+}
+
 function openRespaldo() {
   const nDiario = (JSON.parse(localStorage.getItem('mc_diary') || '[]')).length;
   const nTest = (JSON.parse(localStorage.getItem('mc_testimonios') || '[]')).length;
@@ -2281,194 +2084,16 @@ function restaurarRespaldo(input) {
   lector.readAsText(archivo);
 }
 
-function openDeleteAccount() {
-  const content = document.getElementById('main-content');
-  content.innerHTML = `
-  <div class="section-label">⚠️ Eliminar cuenta</div>
-  <div class="card" style="margin-bottom:14px;border-color:#c0392b">
-    <div style="font-size:12px;color:var(--text-dim);line-height:1.6">
-      Esta acción es <b>permanente</b> y no se puede deshacer. Al eliminar tu cuenta:<br><br>
-      <ul style="margin:0 0 0 16px;padding:0">
-        <li>Perderás acceso a tu cuenta de inmediato</li>
-        <li>Tus publicaciones en la comunidad se borran junto con la cuenta</li>
-        <li>Tu diario, testimonios y versículos guardados viven solo en este dispositivo y no se borran automáticamente: si quieres conservarlos, descarga un respaldo antes desde "Respaldar mis datos"</li>
-      </ul><br>
-      Si solo quieres tomarte un descanso, usa "Cerrar sesión" en vez de esto. Si prefieres pedirlo por correo, escribe a <b>eliminaciondecuentas@tutamail.com</b>.
-    </div>
-  </div>
-  <div class="card" style="margin-bottom:14px">
-    <label class="field-label" id="lbl-delete-pass">Confirma tu contraseña para continuar</label>
-    <input class="field-input" type="password" id="delete-account-pass" placeholder="••••••••">
-    <div class="error-msg" id="delete-account-error"></div>
-  </div>
-  <button class="btn-primary" id="btn-delete-account" style="background:#c0392b" onclick="confirmDeleteAccount()">Eliminar mi cuenta permanentemente</button>
-  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Cancelar</button>`;
-}
 
-async function confirmDeleteAccount() {
-  const pass = document.getElementById('delete-account-pass').value;
-  if (!pass) { showError('delete-account-error', 'Escribe tu contraseña para confirmar.'); return; }
 
-  const btn = document.getElementById('btn-delete-account');
-  btn.textContent = 'Eliminando...';
-  btn.disabled = true;
 
-  if (window.fbDeleteAccount) {
-    const result = await window.fbDeleteAccount(pass);
-    if (result.ok) {
-      currentUser = null;
-      document.getElementById('main-app').style.display = 'none';
-      document.getElementById('screen-login').classList.remove('hidden');
-      alert('Tu cuenta fue eliminada. Gracias por haber sido parte de MenteClara.');
-      return;
-    }
-    btn.textContent = 'Eliminar mi cuenta permanentemente';
-    btn.disabled = false;
-    showError('delete-account-error', result.error === 'auth/wrong-password' || result.error === 'auth/invalid-credential' ? 'Contraseña incorrecta.' : 'No se pudo eliminar la cuenta. Intenta de nuevo.');
-  } else {
-    btn.textContent = 'Eliminar mi cuenta permanentemente';
-    btn.disabled = false;
-    showError('delete-account-error', 'Servicio no disponible en este momento.');
-  }
-}
-
-function renderComunidad() {
-  // Dispara la carga real desde Firestore; mientras tanto se muestra el placeholder de abajo.
-  loadCommunityPosts();
-  return `
-  <div class="section-label">${getText('com_title')}</div>
-  <div class="post-input-area">
-    <textarea class="post-textarea" id="new-post" placeholder="${getText('com_placeholder')}" maxlength="300" oninput="document.getElementById('char-count').textContent=this.value.length+'/300'"></textarea>
-    <div class="char-count" id="char-count">0/300</div>
-    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-      <button onclick="autocorrectPost()" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text-muted);cursor:pointer">✏️ Autocorregir</button>
-      <button onclick="translatePost()" style="background:var(--bg2);border:0.5px solid var(--border);border-radius:20px;padding:6px 12px;font-size:12px;color:var(--text-muted);cursor:pointer">🌐 Traducir</button>
-    </div>
-    <div id="translate-result" style="display:none;background:var(--bg3);border:0.5px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:var(--text)"></div>
-    <div class="post-rules">${getText('com_rules')}</div>
-    <button class="btn-primary" onclick="submitPost()">${getText('com_btn')}</button>
-  </div>
-  <div id="community-feed">
-    <div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">Cargando peticiones...</div>
-  </div>`;
-}
-
-function formatPostTime(createdAt) {
-  if (!createdAt || !createdAt.toDate) return 'hace un momento';
-  const diff = Date.now() - createdAt.toDate().getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return 'ahora';
-  if (min < 60) return `hace ${min} min`;
-  const hrs = Math.floor(min / 60);
-  if (hrs < 24) return `hace ${hrs} h`;
-  const dias = Math.floor(hrs / 24);
-  return dias === 1 ? 'ayer' : `hace ${dias} días`;
-}
 
 // Cursor de paginación de la comunidad (H10). Se reinicia al recargar el feed.
-let comunidadCursor = null;
-let comunidadHayMas = false;
 
-function tarjetaPost(p) {
-  return `
-  <div class="post-card" id="post-${p.id}">
-    <div class="post-header">
-      <span class="post-user">${escapeHtml('Hermano ' + (p.anonId || 'anónimo'))}</span>
-      <span class="post-time">${escapeHtml(formatPostTime(p.createdAt))}</span>
-    </div>
-    <div class="post-text">${escapeHtml(p.text || '')}</div>
-    <div class="post-footer">
-      <button class="pray-btn" id="pray-${p.id}" onclick="togglePray('${p.id}',this)">🙏 <span>${p.praying || 0} ${getText('praying')}</span></button>
-      <button class="report-btn" onclick="openReport('${p.id}')">⚑</button>
-    </div>
-  </div>`;
-}
 
-// Marca visualmente los posts por los que este usuario ya oró
-function marcarYaOrados(posts) {
-  if (!window.hasPrayedFor) return;
-  posts.forEach(async p => {
-    if (await window.hasPrayedFor(p.id)) {
-      const btn = document.getElementById('pray-' + p.id);
-      if (btn) { btn.classList.add('prayed'); btn.disabled = true; }
-    }
-  });
-}
 
-function botonVerMas() {
-  return comunidadHayMas
-    ? `<button id="btn-ver-mas" class="btn-ghost" onclick="cargarMasPosts()" style="margin-top:10px">Ver más peticiones</button>`
-    : '';
-}
 
-async function loadCommunityPosts() {
-  const feed = document.getElementById('community-feed');
-  if (!feed) return;
 
-  comunidadCursor = null;
-  comunidadHayMas = false;
-
-  if (!window.loadFirebasePosts) {
-    feed.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudo conectar con la comunidad en este momento.</div>`;
-    return;
-  }
-
-  const res = await window.loadFirebasePosts();
-  const feedNow = document.getElementById('community-feed');
-  if (!feedNow) return; // el usuario cambió de pestaña mientras cargaba
-
-  if (res === null) {
-    feedNow.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:13px">No se pudieron cargar las peticiones. Revisa tu conexión.</div>`;
-    return;
-  }
-
-  comunidadCursor = res.cursor;
-  comunidadHayMas = res.hayMas;
-
-  const visibles = res.posts.filter(p => !p.reported);
-  if (visibles.length === 0 && !comunidadHayMas) {
-    feedNow.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:13px">Aún no hay peticiones. Sé el primero en compartir una.</div>`;
-    return;
-  }
-
-  communityPosts.length = 0;
-  visibles.forEach(p => communityPosts.push(p));
-
-  feedNow.innerHTML = `<div id="posts-lista">${visibles.map(tarjetaPost).join('')}</div>${botonVerMas()}`;
-  marcarYaOrados(visibles);
-}
-
-async function cargarMasPosts() {
-  const btn = document.getElementById('btn-ver-mas');
-  if (!btn || !comunidadCursor) return;
-  btn.textContent = 'Cargando...';
-  btn.disabled = true;
-
-  const res = await window.loadFirebasePosts(comunidadCursor);
-  const lista = document.getElementById('posts-lista');
-  if (!lista) return; // cambió de pestaña
-
-  if (res === null) {
-    btn.textContent = 'No se pudo cargar. Reintentar';
-    btn.disabled = false;
-    return;
-  }
-
-  comunidadCursor = res.cursor;
-  comunidadHayMas = res.hayMas;
-
-  const nuevos = res.posts.filter(p => !p.reported);
-  nuevos.forEach(p => communityPosts.push(p));
-  lista.insertAdjacentHTML('beforeend', nuevos.map(tarjetaPost).join(''));
-  marcarYaOrados(nuevos);
-
-  if (comunidadHayMas) {
-    btn.textContent = 'Ver más peticiones';
-    btn.disabled = false;
-  } else {
-    btn.remove();
-  }
-}
 
 const pueblos = [
   { name:'Pueblo Uigur', country:'China', pop:'aprox. 12 millones', religion:'Islam', verse:'"Porque de tal manera amó Dios al mundo, que ha dado a su Hijo unigénito, para que todo aquel que en él cree no se pierda, mas tenga vida eterna." — Juan 3:16', praying:214 },
@@ -2490,7 +2115,23 @@ const pueblos = [
   { name:'Pueblo Persa', country:'Irán', pop:'aprox. 50 millones', religion:'Islam', verse:'"Yo os daré descanso para vuestras almas." — Mateo 11:29', praying:207 },
   { name:'Pueblo Kazajo', country:'Kazajistán', pop:'aprox. 14 millones', religion:'Islam', verse:'"Esforzaos y cobrad ánimo; no temáis, porque Jehová tu Dios va contigo." — Deuteronomio 31:6', praying:69 },
   { name:'Pueblo Han (zonas rurales)', country:'China', pop:'cientos de millones sin acceso', religion:'Ateísmo y religión popular', verse:'"La luz en las tinieblas resplandece, y las tinieblas no prevalecieron contra ella." — Juan 1:5', praying:198 },
+  { name:'Pueblo Tibetano', country:'China e India', pop:'aprox. 6 millones', religion:'Budismo tibetano', verse:'"Alzaré mis ojos a los montes, ¿de dónde vendrá mi socorro?" — Salmo 121:1', praying:117 },
+  { name:'Pueblo Berebere', country:'Marruecos y Argelia', pop:'aprox. 25 millones', religion:'Islam', verse:'"Buscadme, y viviréis." — Amós 5:4', praying:91 },
+  { name:'Pueblo Tuareg', country:'Sahara (Malí, Níger, Argelia)', pop:'aprox. 2 millones', religion:'Islam', verse:'"Abriré camino en el desierto, y ríos en la soledad." — Isaías 43:19', praying:64 },
+  { name:'Pueblo Vietnamita', country:'Vietnam', pop:'aprox. 86 millones', religion:'Budismo y ateísmo', verse:'"Conoceréis la verdad, y la verdad os hará libres." — Juan 8:32', praying:105 },
+  { name:'Pueblo Tayiko', country:'Tayikistán y Afganistán', pop:'aprox. 20 millones', religion:'Islam', verse:'"Jehová es mi pastor; nada me faltará." — Salmo 23:1', praying:58 },
+  { name:'Pueblo Sindhi', country:'Pakistán', pop:'aprox. 40 millones', religion:'Islam', verse:'"Venid a mí todos los que estáis trabajados y cargados." — Mateo 11:28', praying:72 },
+  { name:'Pueblo Malayo', country:'Malasia e Indonesia', pop:'aprox. 30 millones', religion:'Islam', verse:'"Mas buscad primeramente el reino de Dios y su justicia." — Mateo 6:33', praying:88 },
+  { name:'Pueblo Yemení', country:'Yemen', pop:'aprox. 30 millones', religion:'Islam', verse:'"El Señor está cerca de los quebrantados de corazón." — Salmo 34:18', praying:143 },
+  { name:'Pueblo Mongol', country:'Mongolia y China', pop:'aprox. 9 millones', religion:'Budismo y chamanismo', verse:'"Yo estoy con vosotros todos los días, hasta el fin del mundo." — Mateo 28:20', praying:67 },
 ];
+
+function prayForPeople(btn) {
+  btn.textContent = getText('btn_prayed');
+  btn.classList.add('prayed');
+  btn.disabled = true;
+  showToast('🙏 ' + getText('praying'));
+}
 
 function renderPueblos() {
   const p = pueblos[Math.floor(Date.now() / 86400000) % pueblos.length];
@@ -3017,10 +2658,11 @@ function toggleCheck(i) {
 }
 
 function renderChat() {
-  let msgs = chatHistory.map(m => `
+  let msgs = chatHistory.map((m, i) => `
   <div class="msg msg-${m.role}">
     <div class="msg-sender">${m.role === 'ai' ? getText('chat_ai_name') : getText('chat_you')}</div>
-    <div class="msg-bubble">${m.text}</div>
+    <div class="msg-bubble">${escapeHtml(m.text || '')}</div>
+    ${m.role === 'ai' ? `<button class="report-ia" data-idx="${i}" onclick="reportarRespuestaIA(this)" aria-label="Reportar esta respuesta" title="Reportar esta respuesta">⚑</button>` : ''}
   </div>`).join('');
   return `
   <div class="section-label">${getText('chat_title')}</div>
@@ -3036,6 +2678,41 @@ function renderChat() {
 // ═══════════════════════════════════════
 // INTERACTIONS
 // ═══════════════════════════════════════
+// Requisito de la política de contenido de IA de Google: toda respuesta
+// generada tiene que poder reportarse. Manda el texto de la respuesta a
+// bug_reports para poder revisarlo desde la consola de Firebase.
+async function reportarRespuestaIA(btn) {
+  const idx = parseInt(btn.dataset.idx, 10);
+  const msg = chatHistory[idx];
+  if (!msg || msg.role !== 'ai') return;
+  if (btn.disabled) return;
+  if (avisarSiOffline()) return;
+
+  btn.disabled = true;
+  btn.textContent = '…';
+
+  if (!window.fbReportarRespuestaIA) {
+    btn.disabled = false; btn.textContent = '⚑';
+    showToast('No se pudo conectar. Intenta de nuevo.');
+    return;
+  }
+
+  const r = await window.fbReportarRespuestaIA({
+    texto: msg.text || '',
+    dispositivo: navigator.userAgent.slice(0, 120),
+    version: AVISO_PRIVACIDAD_VERSION,
+  });
+
+  if (r && r.ok) {
+    btn.textContent = '✓';
+    btn.title = 'Reportado';
+    showToast('Gracias. Revisaremos esta respuesta.');
+  } else {
+    btn.disabled = false; btn.textContent = '⚑';
+    showToast('No se pudo enviar el reporte. Intenta de nuevo.');
+  }
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -3043,172 +2720,14 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-async function togglePray(postId, btn) {
-  if (btn.disabled) return;
-  btn.disabled = true;
 
-  if (!window.prayFirebase) {
-    showToast('No se pudo conectar. Intenta de nuevo.');
-    btn.disabled = false;
-    return;
-  }
 
-  const result = await window.prayFirebase(postId);
 
-  if (result.already) {
-    btn.classList.add('prayed');
-    showToast('Ya oraste por esta petición');
-    return;
-  }
 
-  if (result.ok) {
-    const span = btn.querySelector('span');
-    const actual = parseInt(span.textContent) || 0;
-    span.textContent = (actual + 1) + ' ' + getText('praying');
-    btn.classList.add('prayed');
-    showToast('🙏 ' + getText('praying'));
-    const post = communityPosts.find(p => p.id === postId);
-    if (post) post.praying = (post.praying || 0) + 1;
-    return;
-  }
 
-  btn.disabled = false;
-  showToast('No se pudo registrar tu oración. Intenta de nuevo.');
-}
 
-async function autocorrectPost() {
-  const ta = document.getElementById('new-post');
-  const text = ta.value.trim();
-  if (!text) { showToast('Escribe algo primero'); return; }
-  loadChatLimit();
-  if (chatMsgsToday >= CHAT_DAILY_LIMIT) { showToast('Has alcanzado tu limite diario de IA. Vuelve manana.'); return; }
-  chatMsgsToday++; saveChatLimit();
-  showToast('Corrigiendo...');
-  try {
-    const res = await fetch('https://soft-art-11eb.elestacerc4eloim.workers.dev', {
-      method: 'POST',
-            headers: await getAuthHeaders(),
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: 'Corrige ortografia y gramatica del siguiente texto. Solo devuelve el texto corregido: ' + text }]
-      })
-    });
-    const data = await res.json();
-    const corrected = data.content && data.content[0] ? data.content[0].text.trim() : text;
-    ta.value = corrected;
-    document.getElementById('char-count').textContent = corrected.length + '/300';
-    showToast('✓ Texto corregido');
-  } catch(e) {
-    showToast('Error al corregir. Intenta de nuevo.');
-  }
-}
 
-async function translatePost() {
-  const ta = document.getElementById('new-post');
-  const text = ta.value.trim();
-  if (!text) { showToast('Escribe algo primero'); return; }
-  loadChatLimit();
-  if (chatMsgsToday >= CHAT_DAILY_LIMIT) { showToast('Has alcanzado tu limite diario de IA. Vuelve manana.'); return; }
-  chatMsgsToday++; saveChatLimit();
-  const resultDiv = document.getElementById('translate-result');
-  resultDiv.style.display = 'block';
-  resultDiv.textContent = 'Traduciendo...';
-  const targetLangs = currentLang === 'es' ? 'inglés y portugués' : 'español e inglés';
-  try {
-    const res = await fetch('https://soft-art-11eb.elestacerc4eloim.workers.dev', {
-      method: 'POST',
-            headers: await getAuthHeaders(),
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 400,
-        messages: [{ role: 'user', content: 'Traduce al ' + targetLangs + '. Una traduccion por linea con [idioma] al inicio. Solo traducciones, sin explicaciones: ' + text }]
-      })
-    });
-    const data = await res.json();
-    const translated = data.content && data.content[0] ? data.content[0].text.trim() : '';
-    resultDiv.innerHTML = '<div style="font-size:11px;color:var(--gold);margin-bottom:6px">Traducciones:</div>' + escapeHtml(translated).replace(/\n/g, '<br>');
-  } catch(e) {
-    resultDiv.textContent = 'Error al traducir. Intenta de nuevo.';
-  }
-}
 
-async function submitPost() {
-  const ta = document.getElementById('new-post');
-  const text = ta.value.trim();
-  if (!text) { showToast(getText('post_empty')); return; }
-  const clean = Security.sanitizeText(text);
-  if (Security.filterContent(clean)) { showToast(getText('post_blocked')); return; }
-
-  if (!window.saveFirebasePost) {
-    showToast('No se pudo conectar. Revisa tu conexión e intenta de nuevo.');
-    return;
-  }
-
-  // Moderación en el servidor antes de guardar. El filtro del cliente de arriba
-  // es solo una primera capa y se puede saltar; esta no.
-  const moderacion = await moderarEnServidor(clean);
-  if (moderacion && moderacion.permitido === false) {
-    showToast('Ese mensaje no cumple las normas de la comunidad.');
-    return;
-  }
-
-  const ok = await window.saveFirebasePost(clean);
-  if (ok) {
-    ta.value = '';
-    document.getElementById('char-count').textContent = '0/300';
-    showToast(getText('post_sent'));
-    // Recarga el feed para que el usuario vea su propia petición publicada
-    setTimeout(() => loadCommunityPosts(), 600);
-  } else {
-    showToast('No se pudo publicar tu petición. Intenta de nuevo.');
-  }
-}
-
-// Pide al Worker que revise el texto con la API de moderación.
-// Si el servicio no está configurado o falla, devuelve permitido:true — es
-// preferible dejar pasar un mensaje que bloquear a alguien por un problema
-// nuestro. El botón de reportar sigue disponible como respaldo.
-async function moderarEnServidor(texto) {
-  try {
-    const idToken = window._fbUser ? await window._fbUser.getIdToken() : null;
-    if (!idToken) return { permitido: true };
-    const res = await fetch('https://soft-art-11eb.elestacerc4eloim.workers.dev', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ accion: 'moderar', texto }),
-    });
-    if (!res.ok) return { permitido: true };
-    return await res.json();
-  } catch (e) {
-    return { permitido: true };
-  }
-}
-
-function openReport(i) {
-  document.getElementById('report-modal').classList.add('show');
-  document.getElementById('report-modal').dataset.postIdx = i;
-}
-
-function closeModal() { document.getElementById('report-modal').classList.remove('show'); }
-
-async function confirmReport() {
-  const postId = document.getElementById('report-modal').dataset.postIdx;
-  closeModal();
-  if (window.reportFirebase && postId) {
-    await window.reportFirebase(postId);
-    const card = document.getElementById('post-' + postId);
-    if (card) card.style.display = 'none';
-  }
-  showToast(getText('reported'));
-}
-
-function prayForPeople(btn) {
-  btn.textContent = getText('btn_prayed');
-  btn.classList.add('prayed');
-  btn.disabled = true;
-  showToast('🙏 ' + getText('praying'));
-}
 
 // toggleCheck is now defined in renderPlanes section above
 
@@ -3299,12 +2818,16 @@ function openSecurity() {
     ${items.map(i => `<div class="sec-item"><div class="sec-dot"></div><div class="sec-text">${i}</div></div>`).join('')}
   </div>
   <div class="card">
-    <div class="card-title">🔒 Tus datos en la comunidad</div>
-    <div class="card-sub">Tu nombre real nunca aparece. Usamos un ID anónimo interno (${currentUser ? currentUser.anonId : 'usr_demo'}) que solo se usa si hay una violación legal grave. Nadie en la comunidad puede identificarte.</div>
+    <div class="card-title">🔒 Tu cuenta es anónima</div>
+    <div class="card-sub">No pedimos correo, nombre ni teléfono. Tu cuenta es solo un identificador que genera Firebase (${currentUser ? currentUser.anonId : 'usr_demo'}) y que nadie puede ligar contigo.</div>
   </div>
   <div class="card">
-    <div class="card-title">📧 Tus peticiones de oración</div>
-    <div class="card-sub">Se almacenan encriptadas. No las compartimos con nadie, no las usamos para entrenamiento de IA ni publicidad. Puedes borrarlas en cualquier momento.</div>
+    <div class="card-title">📱 Lo que se queda en tu teléfono</div>
+    <div class="card-sub">Tu diario de oración, tus testimonios, tus versículos guardados y el tracker de ayuno nunca salen de este dispositivo. No viajan a ningún servidor y nadie más puede leerlos.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">💬 El chat con IA</div>
+    <div class="card-sub">Lo que escribes en el chat se envía a Anthropic para generar la respuesta. No se usa para entrenar modelos y no se guarda ligado a tu cuenta. Si una respuesta te parece inapropiada, tócala en ⚑ para reportarla.</div>
   </div>
   <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
 }
@@ -3638,11 +3161,11 @@ function openDiary() {
   ${diaryEntries.map((e,i) => `
   <div class="card" style="margin-bottom:8px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <span style="font-size:11px;color:var(--text-dim)">${e.date}</span>
+      <span style="font-size:11px;color:var(--text-dim)">${escapeHtml(e.date || '')}</span>
       <span style="font-size:10px;padding:2px 8px;border-radius:10px;${e.status==='respondida'?'background:rgba(16,185,129,0.15);color:#6ee7b7':'background:rgba(232,201,122,0.15);color:var(--gold)'}">${e.status==='respondida'?'✓ Respondida':'⏳ Pendiente'}</span>
     </div>
-    <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:8px">${e.petition}</div>
-    ${e.answer ? `<div style="font-size:12px;color:#6ee7b7;border-left:2px solid #10b981;padding-left:8px;font-style:italic">${e.answer}</div>` : `
+    <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:8px">${escapeHtml(e.petition || '')}</div>
+    ${e.answer ? `<div style="font-size:12px;color:#6ee7b7;border-left:2px solid #10b981;padding-left:8px;font-style:italic">${escapeHtml(e.answer)}</div>` : `
     <input class="field-input" type="text" placeholder="Registra cómo Dios respondió..." style="margin-bottom:6px;font-size:12px;padding:7px 10px" id="answer-${i}">
     <button onclick="markAnswered(${i})" style="font-size:12px;background:var(--bg2);border:0.5px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text-muted);cursor:pointer">Marcar como respondida</button>`}
   </div>`).join('')}
@@ -3847,15 +3370,20 @@ const NotificationSystem = {
     if (this.eveningInterval) clearInterval(this.eveningInterval);
 
     // Verificar cada minuto si es hora de notificar
-    const check = setInterval(() => {
+    // F1 — antes esto se devolvia sin asignarse, asi que el clearInterval de
+    // arriba nunca limpiaba nada y cada llamada dejaba otro intervalo vivo.
+    // Ademas se guarda el ultimo disparo para no notificar dos veces el mismo
+    // minuto si el temporizador se desfasa.
+    this.morningInterval = setInterval(() => {
       const now = new Date();
       const h = now.getHours();
       const m = now.getMinutes();
-      if (h === 6 && m === 0) this.sendNotification('morning');
-      if (h === 18 && m === 0) this.sendNotification('evening');
+      const marca = `${now.toDateString()}-${h}`;
+      if (h === 6 && m === 0 && this._ultimo !== marca) { this._ultimo = marca; this.sendNotification('morning'); }
+      if (h === 18 && m === 0 && this._ultimo !== marca) { this._ultimo = marca; this.sendNotification('evening'); }
     }, 60000);
 
-    return check;
+    return this.morningInterval;
   },
 
   sendNotification(type) {
@@ -4148,29 +3676,39 @@ function openAyunoQuestionnaire(tipoId) {
     </div>
   </div>
   <div class="card" style="margin-bottom:14px">
+    <div style="font-size:12px;color:var(--text);font-weight:600;margin-bottom:8px">¿Vives o has vivido con un trastorno de la conducta alimentaria?</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-ghost" style="flex:1" onclick="bloquearAyunoPorTCA()">Sí</button>
+      <button class="btn-ghost" style="flex:1" onclick="document.getElementById('ayuno-consent-box').style.display='block';this.parentElement.parentElement.style.display='none'">No</button>
+    </div>
+  </div>
+  <div class="card" id="ayuno-consent-box" style="margin-bottom:14px;display:none">
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--text);cursor:pointer">
       <input type="checkbox" id="ayuno-consent-check" onchange="const b=document.getElementById('ayuno-start-btn');b.disabled=!this.checked;b.style.opacity=this.checked?'1':'0.4';">
-      <span>He leído esta información y decido comenzar este ayuno bajo mi propia responsabilidad. Entiendo que MenteClara no ofrece consejo médico.</span>
+      <span>He leído esta información y decido comenzar este ayuno bajo mi propia responsabilidad. Entiendo que MenteClara no ofrece consejo médico, y autorizo el tratamiento de los datos de salud que registre en esta función.</span>
     </label>
   </div>
   <button class="btn-primary" id="ayuno-start-btn" disabled style="opacity:0.4" onclick="startAyuno('${tipoId}')">Comenzar ayuno</button>
   <button class="btn-ghost" onclick="openAyuno()" style="margin-top:8px">← Cancelar</button>`;
 }
 
-// ═══════════════════════════════════════
-// PLANES PARA IGLESIAS
-// ═══════════════════════════════════════
-function openChurchPlans() {
+// Si la persona indica antecedente de trastorno alimentario, la app no habilita
+// el ayuno. El ayuno intermitente puede reactivar conductas restrictivas, y no
+// tenemos forma de acompañar eso con seguridad desde una app.
+function bloquearAyunoPorTCA() {
   const content = document.getElementById('main-content');
   content.innerHTML = `
-  <div class="section-label">⛪ Planes para iglesias y pastores</div>
-  <div class="card-sub" style="margin-bottom:14px">Herramientas para acompañar a tu congregación.</div>
-  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Básico — $1 USD/mes</div><div class="card-sub">Acceso premium para tu congregación</div></div>
-  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Iglesia — $5 USD/mes</div><div class="card-sub">Hasta 50 miembros con seguimiento pastoral</div></div>
-  <div class="card" style="margin-bottom:10px"><div style="font-weight:600;color:var(--text)">Plan Ministerio — $10 USD/mes</div><div class="card-sub">Miembros ilimitados y reportes de crecimiento</div></div>
-  <div class="card-sub" style="margin-top:8px">Para activar un plan, contáctanos desde la sección de soporte.</div>
-  <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
+  <div class="section-label">Gracias por tu confianza</div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="font-size:13px;color:var(--text);line-height:1.6">
+      Preferimos no habilitar el ayuno en este caso. El ayuno puede reactivar patrones de restricción, y cuidarte importa más que cualquier función de la app.<br><br>
+      Puedes seguir usando todo lo demás: el devocional diario, la Biblia y el diario de oración.<br><br>
+      Si quieres hablar con alguien sobre tu relación con la comida, un profesional de salud puede acompañarte mucho mejor que nosotros.
+    </div>
+  </div>
+  <button class="btn-primary" onclick="showTab('home',document.getElementById('nav-home'))">Volver al inicio</button>`;
 }
+
 
 // ═══════════════════════════════════════
 // MÚSICA WORSHIP
@@ -4210,8 +3748,8 @@ function openTestimonios() {
   ${testimonios.length === 0 ? '<div class="card"><div class="card-sub">Aún no has compartido testimonios.</div></div>' :
   testimonios.map(t => `
   <div class="card" style="margin-bottom:8px">
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${t.date}</div>
-    <div style="font-size:13px;color:var(--text)">${t.text}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${escapeHtml(t.date || '')}</div>
+    <div style="font-size:13px;color:var(--text)">${escapeHtml(t.text || '')}</div>
   </div>`).join('')}
   </div>
   <button class="btn-ghost" onclick="showTab('home',document.getElementById('nav-home'))" style="margin-top:8px">← Volver</button>`;
