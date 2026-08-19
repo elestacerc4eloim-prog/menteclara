@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Política de Privacidad — MenteClara</title>
+<title>Aviso de Privacidad — MenteClara</title>
 <style>
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d0820;color:#e8e0ff;line-height:1.6;max-width:720px;margin:0 auto;padding:32px 20px}
 h1{color:#e8c97a;font-size:24px}
@@ -11,54 +11,81 @@ h2{color:#a78bfa;font-size:18px;margin-top:28px}
 p,li{color:#e8e0ff;font-size:14px}
 a{color:#a78bfa}
 .updated{color:#a89fd0;font-size:12px;margin-bottom:24px}
+.aviso{border:1px solid #e8c97a;border-radius:8px;padding:12px 16px;margin:20px 0;background:rgba(232,201,122,0.07)}
+table{width:100%;border-collapse:collapse;margin:16px 0}
+th,td{border:1px solid #3a2f5a;padding:8px;font-size:13px;text-align:left;color:#e8e0ff}
+th{color:#a78bfa}
 </style>
 </head>
 <body>
-<h1>Política de Privacidad de MenteClara</h1>
-<p class="updated">Última actualización: julio de 2026</p>
+<h1>Aviso de Privacidad de MenteClara</h1>
+<p class="updated">Última actualización: agosto de 2026 · Versión 2026-08-09</p>
 
-<p>MenteClara ("la app", "nosotros") es una aplicación de oración, devoción y bienestar espiritual. Esta política explica qué datos recolectamos, cómo los usamos y qué derechos tienes sobre ellos.</p>
+<h2>1. Quién es el responsable</h2>
+<p>El responsable del tratamiento de tus datos personales es <strong>[NOMBRE COMPLETO O RAZÓN SOCIAL — PENDIENTE]</strong>, con domicilio en <strong>[DOMICILIO — PENDIENTE]</strong>, en cumplimiento del artículo 16 de la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP).</p>
+<p>Contacto: <a href="mailto:menteclarasoporte@gmail.com">menteclarasoporte@gmail.com</a></p>
 
-<h2>1. Datos que recolectamos</h2>
+<h2>2. Lo más importante en pocas palabras</h2>
+<div class="aviso">
+<p>MenteClara <strong>no te pide correo, nombre, teléfono ni ningún dato que te identifique</strong>. Tu cuenta es anónima.</p>
+<p>Tu diario, tus testimonios, tus versículos guardados y tu registro de ayuno <strong>nunca salen de tu teléfono</strong>.</p>
+<p><strong>No vendemos datos. No hay anuncios. No hay rastreadores publicitarios ni redes sociales integradas.</strong></p>
+</div>
+
+<h2>3. Qué datos se tratan y dónde viven</h2>
+<table>
+<tr><th>Dato</th><th>Dónde vive</th><th>Para qué</th></tr>
+<tr><td>Identificador anónimo de cuenta (UID)</td><td>Servidor (Firebase)</td><td>Permitir el acceso al chat sin pedirte datos personales</td></tr>
+<tr><td>Registro de tu consentimiento y versión del aviso aceptada</td><td>Servidor (Firebase)</td><td>Demostrar que otorgaste tu consentimiento, como exige la ley</td></tr>
+<tr><td>Reportes de fallas y de respuestas de la IA</td><td>Servidor (Firebase)</td><td>Revisar problemas y contenido inapropiado</td></tr>
+<tr><td>Mensajes que escribes en el chat</td><td>Se envían a Anthropic para generar la respuesta</td><td>Responder tu consulta bíblica</td></tr>
+<tr><td>Diario, testimonios, versículos guardados, racha, logros, quiz</td><td><strong>Solo en tu teléfono</strong></td><td>Que la app funcione para ti</td></tr>
+<tr><td>Registro de ayuno y respuestas del cuestionario de salud</td><td><strong>Solo en tu teléfono</strong></td><td>Mostrarte tu progreso</td></tr>
+</table>
+<p>Los datos que viven solo en tu teléfono no se transmiten a ningún servidor y no tenemos forma de leerlos.</p>
+
+<h2>4. Datos personales sensibles</h2>
+<p>El solo hecho de usar MenteClara revela una <strong>creencia religiosa</strong>, que es un dato personal sensible conforme al artículo 3 de la LFPDPPP y al artículo 9 del Reglamento General de Protección de Datos europeo.</p>
+<p>Por eso, antes de entrar te pedimos tu <strong>consentimiento expreso</strong> mediante una casilla separada, y guardamos el registro de ese consentimiento junto con la versión de este aviso que aceptaste. Si el aviso cambia de forma relevante, te lo pediremos de nuevo.</p>
+<p>Las respuestas del cuestionario de salud previo al ayuno <strong>no se almacenan en ningún lado</strong>: se usan en el momento para decidir si se te permite iniciar el ayuno y se descartan.</p>
+
+<h2>5. Con quién se comparten</h2>
 <ul>
-<li><strong>Cuenta:</strong> correo electrónico y contraseña (gestionados por Firebase Authentication) para crear tu cuenta e iniciar sesión.</li>
-<li><strong>Contenido generado por el usuario:</strong> peticiones de oración, versículos guardados, notas, racha de uso, respuestas de quiz.</li>
-<li><strong>Datos técnicos básicos:</strong> información de uso de la app (ej. Firestore) para que las funciones (racha, logros, comunidad) operen correctamente.</li>
+<li><strong>Google (Firebase Authentication y Cloud Firestore):</strong> aloja la cuenta anónima, el registro de consentimiento y los reportes.</li>
+<li><strong>Cloudflare:</strong> intermedia las peticiones del chat hacia el proveedor de inteligencia artificial.</li>
+<li><strong>Anthropic:</strong> procesa los mensajes que escribes en el chat para generar la respuesta. Conforme a sus políticas, ese contenido <strong>no se usa para entrenar modelos</strong>.</li>
 </ul>
+<p>Estos son encargados del tratamiento, no destinatarios que puedan usar tus datos para fines propios. <strong>No compartimos datos con anunciantes, corredores de datos ni redes sociales.</strong></p>
 
-<h2>2. Cómo usamos tus datos</h2>
-<ul>
-<li>Para brindarte acceso a tu cuenta y contenido guardado entre dispositivos.</li>
-<li>Para mostrar peticiones de oración de forma anónima en la comunidad (tu identidad real nunca se muestra públicamente).</li>
-<li>Para enviarte notificaciones diarias de versículo y oración, si las activas.</li>
-</ul>
-<p>No vendemos tus datos a terceros. No usamos tu información para publicidad. No usamos tus peticiones de oración para entrenar modelos de inteligencia artificial.</p>
+<h2>6. Por cuánto tiempo</h2>
+<p>La cuenta anónima y el registro de consentimiento se conservan mientras uses la app. Los reportes de fallas se conservan el tiempo necesario para atenderlos. Al eliminar tu cuenta, se borran la cuenta y el registro de consentimiento.</p>
 
-<h2>3. Con quién compartimos datos</h2>
-<p>Usamos los siguientes proveedores para operar la app:</p>
-<ul>
-<li><strong>Firebase (Google):</strong> autenticación y base de datos.</li>
-<li><strong>Anthropic (Claude):</strong> genera respuestas del chat bíblico con IA. Los mensajes que envías al chat se procesan para generar una respuesta, pero no se almacenan permanentemente vinculados a tu identidad.</li>
-<li><strong>PayPal:</strong> procesa donaciones voluntarias, si decides donar.</li>
-</ul>
+<h2>7. Tus derechos ARCO</h2>
+<p>Puedes solicitar el <strong>acceso, rectificación, cancelación u oposición</strong> al tratamiento de tus datos, así como revocar tu consentimiento, escribiendo a <a href="mailto:eliminaciondecuentas@tutamail.com">eliminaciondecuentas@tutamail.com</a>.</p>
+<p>La forma más directa de revocar tu consentimiento es <strong>eliminar tu cuenta desde la app</strong>, en Ajustes. La eliminación es inmediata y permanente.</p>
+<div class="aviso">
+<p><strong>Ten en cuenta:</strong> como tu cuenta es anónima y no guardamos ningún dato que te identifique, para atender una solicitud por correo necesitaríamos que nos proporciones tu identificador anónimo, que puedes ver dentro de la app en la sección de seguridad. Sin él no podemos localizar tus datos.</p>
+</div>
 
-<h2>4. Comunidad de oración anónima</h2>
-<p>Las peticiones que publicas en la comunidad se muestran sin tu nombre. Usamos un identificador anónimo interno que solo se revisa en caso de reportes de contenido que violen las normas de uso o requerimientos legales.</p>
+<h2>8. Menores de edad</h2>
+<p>MenteClara está dirigida a personas de <strong>13 años o más</strong>. No recolectamos intencionalmente datos de menores de 13 años. Si en tu país la edad mínima para consentir el tratamiento de datos es mayor, se aplica la de tu país.</p>
 
-<h2>5. Seguridad</h2>
-<p>Usamos autenticación segura, límite de intentos de inicio de sesión, sanitización de texto y expiración de sesión (60 minutos de inactividad) para proteger tu cuenta.</p>
+<h2>9. Cookies y rastreo</h2>
+<p>MenteClara <strong>no usa cookies publicitarias, píxeles de seguimiento ni herramientas de analítica de terceros</strong>. El almacenamiento local del navegador se usa únicamente para guardar tu contenido en el dispositivo y mantener tu sesión.</p>
 
-<h2>6. Tus derechos</h2>
-<p>Puedes solicitar la eliminación de tu cuenta y tus datos en cualquier momento escribiendo a nuestro correo de soporte. También puedes borrar versículos guardados, notas y peticiones directamente desde la app.</p>
+<h2>10. Seguridad</h2>
+<p>La conexión está protegida con HTTPS y el acceso a los datos en el servidor está restringido por reglas de seguridad que impiden que un usuario lea la información de otro. Ningún sistema es infalible, pero al no recolectar datos identificables, la información expuesta en un incidente sería mínima.</p>
 
-<h2>7. Menores de edad</h2>
-<p>MenteClara no está dirigida a niños menores de 13 años y no recolecta intencionalmente datos de menores de esa edad.</p>
+<h2>11. Cambios a este aviso</h2>
+<p>Podemos actualizar este aviso. Si el cambio afecta la finalidad del tratamiento o los datos sensibles, te pediremos tu consentimiento nuevamente dentro de la app antes de continuar. La versión vigente siempre aparece al inicio de esta página.</p>
 
-<h2>8. Cambios a esta política</h2>
-<p>Podemos actualizar esta política ocasionalmente. Publicaremos cualquier cambio en esta misma página con la fecha de actualización.</p>
+<h2>12. Autoridad de control</h2>
+<p>Si consideras que tu derecho a la protección de datos ha sido vulnerado, puedes acudir a la <strong>Secretaría Anticorrupción y Buen Gobierno</strong>, autoridad competente en México en materia de protección de datos personales.</p>
 
-<h2>9. Contacto</h2>
-<p>Si tienes preguntas sobre esta política o tus datos, contáctanos en el correo de soporte de MenteClara.</p>
+<h2>13. Contacto</h2>
+<p>Soporte: <a href="mailto:menteclarasoporte@gmail.com">menteclarasoporte@gmail.com</a><br>
+Derechos ARCO y eliminación de cuentas: <a href="mailto:eliminaciondecuentas@tutamail.com">eliminaciondecuentas@tutamail.com</a><br>
+Términos de uso: <a href="terminos.html">consúltalos aquí</a></p>
 
 </body>
 </html>
