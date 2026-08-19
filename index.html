@@ -443,7 +443,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 
   <div class="verse-banner">
-    <div class="verse-ref" id="verse-ref">Filipenses 4:13 • RVR1960</div>
+    <div class="verse-ref" id="verse-ref">Filipenses 4:13 • RV1909</div>
     <div class="verse-text" id="verse-text">"Todo lo puedo en Cristo que me fortalece."</div>
     <div class="verse-actions">
       <button class="verse-btn" onclick="saveCurrentVerse()">❤ <span id="vbtn-save">Guardar</span></button>
@@ -679,7 +679,7 @@ const T = {
     stat_streak:'Días racha', stat_praying:'Orando hoy', stat_goals:'Logros',
     mod_timer:'Timer de oración', mod_timer_d:'Cronometra tu tiempo con Dios',
     mod_diary:'Diario de oración', mod_diary_d:'Registra peticiones y respuestas',
-    mod_chars:'Personajes bíblicos', mod_chars_d:'Análisis solo desde la Escritura — RVR1960',
+    mod_chars:'Personajes bíblicos', mod_chars_d:'Análisis solo desde la Escritura — RV1909',
     mod_music:'Música worship', mod_music_d:'Adoración instrumental con IA',
     mod_security:'Privacidad y seguridad', mod_security_d:'Tu información siempre protegida',
     prem_title:'Plan Iglesias', prem_desc:'Herramientas para pastores y congregaciones',
@@ -992,7 +992,7 @@ function setLang(l) {
   document.getElementById('badge-secure').textContent = getText('badge_secure');
   // Update verse
   const verses = {
-    es:['Filipenses 4:13 • RVR1960','"Todo lo puedo en Cristo que me fortalece."'],
+    es:['Filipenses 4:13 • RV1909','"Todo lo puedo en Cristo que me fortalece."'],
     en:['Philippians 4:13 • KJV','"I can do all things through Christ which strengtheneth me."'],
     pt:['Filipenses 4:13 • ARA','"Tudo posso naquele que me fortalece."'],
     fr:['Philippiens 4:13 • LSG','"Je puis tout par celui qui me fortifie."'],
@@ -1248,7 +1248,7 @@ let timerRunning = false;
 // CHAT CON IA REAL (ANTHROPIC API)
 // ═══════════════════════════════════════
 const chatHistory = [
-  { role:'ai', text:'Hola, estoy aquí para acompañarte en tu camino espiritual. ¿En qué puedo ayudarte hoy? Puedo guiarte con versículos de la RVR1960, reflexión bíblica o simplemente escucharte.' },
+  { role:'ai', text:'Hola, estoy aquí para acompañarte en tu camino espiritual. ¿En qué puedo ayudarte hoy? Puedo guiarte con versículos de la RV1909, reflexión bíblica o simplemente escucharte.' },
 ];
 
 const CHAT_SYSTEM_PROMPT = `Eres un asistente espiritual bíblico dentro de MenteClara. Tu nombre es "IA Bíblica".
@@ -1386,9 +1386,9 @@ function burbujaIA(texto, idx) {
 
 function fallbackReply(text) {
   const replies = [
-    'La Palabra nos dice en Filipenses 4:6 RVR1960: "Por nada estéis afanosos, sino sean conocidas vuestras peticiones delante de Dios en toda oración y ruego, con acción de gracias."',
+    'La Palabra nos dice en Filipenses 4:6 RV1909: "Por nada estéis afanosos, sino sean conocidas vuestras peticiones delante de Dios en toda oración y ruego, con acción de gracias."',
     'En el Salmo 34:18 encontramos: "Cercano está Jehová a los quebrantados de corazón; y salva a los contritos de espíritu." Dios ve tu situación.',
-    'Romanos 8:28 RVR1960 nos recuerda: "Y sabemos que a los que aman a Dios, todas las cosas les ayudan a bien." ¿Quieres explorar más sobre este tema?',
+    'Romanos 8:28 RV1909 nos recuerda: "Y sabemos que a los que aman a Dios, todas las cosas les ayudan a bien." ¿Quieres explorar más sobre este tema?',
     'Isaías 41:10 dice: "No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios que te esfuerzo." Dios mismo habla a tu corazón hoy.',
   ];
   return replies[Math.floor(Math.random() * replies.length)];
@@ -2140,7 +2140,7 @@ function renderPueblos() {
   <div class="pueblo-card">
     <div class="pueblo-name">${p.name} — ${p.country}</div>
     <div class="pueblo-info">Población: ${p.pop} • ${p.religion}</div>
-    <div class="pueblo-verse">${p.verse} RVR1960</div>
+    <div class="pueblo-verse">${p.verse} RV1909</div>
     <div class="pueblo-stats">
       <span class="pueblo-praying">🙏 ${getText('pue_praying').replace('{n}', p.praying)}</span>
       <button class="btn-pray" id="pray-btn" onclick="prayForPeople(this)">${getText('btn_pray')}</button>
@@ -3007,13 +3007,13 @@ function buscarRV1909(query) {
 // Versículos diarios rotativos (fallback si no hay API key)
 const dailyVerses = {
   es: [
-    { ref:'Filipenses 4:13 • RVR1960', text:'"Todo lo puedo en Cristo que me fortalece."' },
-    { ref:'Salmos 23:1 • RVR1960', text:'"Jehová es mi pastor; nada me faltará."' },
-    { ref:'Jeremías 29:11 • RVR1960', text:'"Porque yo sé los pensamientos que tengo acerca de vosotros, dice Jehová, pensamientos de paz, y no de mal."' },
-    { ref:'Isaías 41:10 • RVR1960', text:'"No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios que te esfuerzo."' },
-    { ref:'Romanos 8:28 • RVR1960', text:'"Y sabemos que a los que aman a Dios, todas las cosas les ayudan a bien."' },
-    { ref:'Juan 3:16 • RVR1960', text:'"Porque de tal manera amó Dios al mundo, que ha dado a su Hijo unigénito, para que todo aquel que en él cree, no se pierda, mas tenga vida eterna."' },
-    { ref:'Proverbios 3:5-6 • RVR1960', text:'"Fíate de Jehová de todo tu corazón, y no te apoyes en tu propia prudencia."' },
+    { ref:'Filipenses 4:13 • RV1909', text:'"Todo lo puedo en Cristo que me fortalece."' },
+    { ref:'Salmos 23:1 • RV1909', text:'"Jehová es mi pastor; nada me faltará."' },
+    { ref:'Jeremías 29:11 • RV1909', text:'"Porque yo sé los pensamientos que tengo acerca de vosotros, dice Jehová, pensamientos de paz, y no de mal."' },
+    { ref:'Isaías 41:10 • RV1909', text:'"No temas, porque yo estoy contigo; no desmayes, porque yo soy tu Dios que te esfuerzo."' },
+    { ref:'Romanos 8:28 • RV1909', text:'"Y sabemos que a los que aman a Dios, todas las cosas les ayudan a bien."' },
+    { ref:'Juan 3:16 • RV1909', text:'"Porque de tal manera amó Dios al mundo, que ha dado a su Hijo unigénito, para que todo aquel que en él cree, no se pierda, mas tenga vida eterna."' },
+    { ref:'Proverbios 3:5-6 • RV1909', text:'"Fíate de Jehová de todo tu corazón, y no te apoyes en tu propia prudencia."' },
   ],
   en: [
     { ref:'Philippians 4:13 • KJV', text:'"I can do all things through Christ which strengtheneth me."' },
@@ -3480,7 +3480,7 @@ const quizQuestions = [
   { q:'¿En qué ciudad nació Jesús?', opts:['Nazaret','Jerusalén','Belén','Capernaum'], correct:2, ref:'Lucas 2:4-7' },
   { q:'¿Cuál es el versículo más corto de la Biblia?', opts:['"Orad sin cesar"','"Jesús lloró"','"Dad gracias"','"Regocijaos"'], correct:1, ref:'Juan 11:35' },
   { q:'¿Quién construyó el templo de Jerusalén?', opts:['David','Salomón','Ezequías','Nehemías'], correct:1, ref:'1 Reyes 6:1' },
-  { q:'¿Cuántos libros tiene la Biblia RVR1960?', opts:['60','66','72','73'], correct:1, ref:'Canon bíblico protestante' },
+  { q:'¿Cuántos libros tiene la Biblia?', opts:['60','66','72','73'], correct:1, ref:'Canon bíblico protestante' },
 ];
 
 let quizState = { current:0, score:0, answered:false, selectedOption:null };
